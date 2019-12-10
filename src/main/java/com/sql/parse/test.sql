@@ -1,4 +1,4 @@
-insert overwrite table secoo_tmp.tmp_table
+insert overwrite table secoo_tmp.test_sql_lineage_result
 select
   t1.user_type,
   product_level,
