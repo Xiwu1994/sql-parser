@@ -27,7 +27,6 @@ public class ProcessTokTabref {
         parseTableResult.setTableFullName(tableFullName);
         MetaCacheUtil.getInstance().init(tableFullName);
         parseTableResult.setColumnNameList(MetaCacheUtil.getInstance().getColumnByDBAndTable(tableFullName));
-        // System.out.println("TOK_TABREF: " + parseTableResult);
         return parseTableResult;
     }
 }

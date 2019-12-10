@@ -16,8 +16,23 @@ from (
   left join (
     select
       product_id,
-      sum(now_price_rmb_amt) as pay2
-    from secoo_fact.fact_order_item_accu_day_full
+      sum(pay) as pay2
+    from (
+      select
+        product_id,
+        sum(now_price_rmb_amt) as pay
+      from secoo_fact.fact_order_item_accu_day_full
+      group by product_id
+
+      union all
+
+      select
+        id as product_id,
+        max(market_price) as pay
+      from secoo_ods_mysql.ods_secooerpdb__v_t_product
+      where p_day = '2019-12-02'
+      group by id
+    ) t1
     group by product_id
   ) t3
   on t1.product_id = t3.product_id

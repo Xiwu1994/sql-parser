@@ -137,7 +137,6 @@ public class ProcessTokSelexpr {
         ParseColumnResult parseColumnResult = new ParseColumnResult();
         parseColumnResult.setAliasName(columnAliasName);
         parseColumnResult.setFromTableColumnSet(fromColumnSet);
-        // System.out.println("TOK_SELEXPR: " + parseColumnResult);
         return parseColumnResult;
     }
 }
