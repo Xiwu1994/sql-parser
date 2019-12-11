@@ -31,6 +31,14 @@ public class SqlLineage {
     private Map<String, ParseColumnResult> parseFromResult = new HashMap<>();
     private Map<String, ParseColumnResult> parseLateralViewResult = new HashMap<>();
 
+    private Map<String, ParseColumnResult> getParseUnionColumnResults() {
+        return parseUnionColumnResults;
+    }
+
+    private List<Map<String, ParseColumnResult>> getParseQueryResults() {
+        return parseQueryResults;
+    }
+
     public void clear() {
         parseColumnResults.clear();
         parseTableResults.clear();
@@ -51,8 +59,14 @@ public class SqlLineage {
         conf.set("_hive.local.session.path","/tmp");
         Context context = new Context(conf);
         ParseDriver pd = new ParseDriver();
-        ASTNode ast = pd.parse(sql, context);
-        logger.info(ast.dump());
+        ASTNode ast = null;
+        try {
+            ast = pd.parse(sql, context);
+            logger.debug(ast.dump());
+        } catch (Exception e) {
+            logger.error("process error sql: " + sql);
+            logger.error(e);
+        }
         return ast;
     }
 
@@ -133,32 +147,6 @@ public class SqlLineage {
                 insertTableColumns = MetaCacheUtil.getInstance().getColumnByDBAndTable(insertTableName);
                 break;
 
-            // TOK_SUBQUERY 子查询
-            case HiveParser.TOK_SUBQUERY:
-                // from TOK_UNIONALL or TOK_QUERY
-                // to TOK_FROM or TOK_JOIN
-                Map<String, ParseColumnResult> subQueryColumnMap = null;
-                if (parseUnionColumnResults.size() > 0) {
-                    // 有UNION ALL 操作
-                    subQueryColumnMap = parseUnionColumnResults;
-                } else {
-                    subQueryColumnMap = parseQueryResults.get(0);
-                }
-                ParseSubQueryResult parseSubQueryResult = new ParseSubQueryResult();
-                String subQueryAliasName = BaseSemanticAnalyzer.getUnescapedName((ASTNode) ast.getChild(1));
-                parseSubQueryResult.setAliasName(subQueryAliasName);
-
-                Map<String, ParseColumnResult> selectResults = new HashMap<>();
-                selectResults.putAll(subQueryColumnMap);
-                parseSubQueryResult.setParseSubQueryResults(selectResults);
-
-                parseUnionColumnResults.clear();
-                parseQueryResults.clear();
-                logger.info("TOK_SUBQUERY: " + parseSubQueryResult);
-                parseSubQueryResults.add(parseSubQueryResult);
-
-                break;
-
             case HiveParser.TOK_UNIONALL:
                 // from TOK_QUERY
                 // to TOK_SUBQUERY
@@ -209,7 +197,7 @@ public class SqlLineage {
                     }
                     parseColumnResults.clear();
                     parseSelectResults.putAll(selectResultsTmp);
-                    logger.info("TOK_INSERT: " + selectResultsTmp);
+                    logger.debug("TOK_INSERT: " + selectResultsTmp);
                 }
                 break;
 
@@ -235,7 +223,7 @@ public class SqlLineage {
                 // from TOK_SUBQUERY or TOK_TABREF or TOK_JOIN or TOK_LATERAL_VIEW
                 // to TOK_SELEXPR
                 parseFromResult = genFromColumnData((ASTNode) ast.getChild(0));
-                logger.info("TOK_FROM: " + parseFromResult);
+                logger.debug("TOK_FROM: " + parseFromResult);
                 break;
 
             // TOK_JOIN
@@ -265,7 +253,7 @@ public class SqlLineage {
                 parseSubQueryResults.clear();
                 parseJoinResult.setParseSubQueryResults(subQueryResults);
 
-                logger.info("TOK_JOIN: " + parseJoinResult);
+                logger.debug("TOK_JOIN: " + parseJoinResult);
 
                 parseJoinResults.add(parseJoinResult);
 
@@ -275,7 +263,7 @@ public class SqlLineage {
             case HiveParser.TOK_TABREF:
                 // to TOK_FROM or TOK_JOIN
                 ParseTableResult parseTableResult = ProcessTokTabref.process(ast);
-                logger.info("TOK_TABREF: " + parseTableResult);
+                logger.debug("TOK_TABREF: " + parseTableResult);
 
                 parseTableResults.add(parseTableResult);
                 break;
@@ -287,7 +275,7 @@ public class SqlLineage {
                 ProcessTokSelexpr processTokSelexpr = new ProcessTokSelexpr();
                 processTokSelexpr.setParseFromResult(parseFromResult);
                 ParseColumnResult parseColumnResult = processTokSelexpr.process(ast);
-                logger.info("TOK_SELEXPR: " + parseColumnResult);
+                logger.debug("TOK_SELEXPR: " + parseColumnResult);
                 parseColumnResults.add(parseColumnResult);
                 break;
             default:
@@ -296,10 +284,40 @@ public class SqlLineage {
     }
 
     public void parseASTNode(ASTNode ast) {
-        // 递归处理，优先处理子节点
-        parseChildASTNode(ast);
-        // 子节点都处理完后，处理当前节点
-        parseCurrentASTNode(ast);
+        if (ast == null) {
+            return;
+        }
+
+        if (ast.getToken() != null && ast.getToken().getType() == HiveParser.TOK_SUBQUERY) {
+            // TOK_SUBQUERY 子查询
+            // from TOK_UNIONALL or TOK_QUERY
+            // to TOK_FROM or TOK_JOIN
+            SqlLineage sqlLineage = new SqlLineage();
+            sqlLineage.parseASTNode((ASTNode) ast.getChild(0));
+
+            Map<String, ParseColumnResult> subQueryColumnMap;
+            if (sqlLineage.getParseUnionColumnResults().size() > 0) {
+                // 有UNION ALL 操作
+                subQueryColumnMap = sqlLineage.getParseUnionColumnResults();
+            } else {
+                subQueryColumnMap = sqlLineage.getParseQueryResults().get(0);
+            }
+            ParseSubQueryResult parseSubQueryResult = new ParseSubQueryResult();
+            String subQueryAliasName = BaseSemanticAnalyzer.getUnescapedName((ASTNode) ast.getChild(1));
+            parseSubQueryResult.setAliasName(subQueryAliasName);
+
+            Map<String, ParseColumnResult> selectResults = new HashMap<>();
+            selectResults.putAll(subQueryColumnMap);
+            parseSubQueryResult.setParseSubQueryResults(selectResults);
+            logger.debug("TOK_SUBQUERY: " + parseSubQueryResult);
+            parseSubQueryResults.add(parseSubQueryResult);
+        } else {
+            // 非 TOK_SUBQUERY 子查询
+            // 递归处理，优先处理子节点
+            parseChildASTNode(ast);
+            // 子节点都处理完后，处理当前节点
+            parseCurrentASTNode(ast);
+        }
     }
 
     public void parse(String sql) throws Exception {

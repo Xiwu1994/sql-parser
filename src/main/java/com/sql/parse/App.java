@@ -26,11 +26,11 @@ public class App {
         SqlLineage sqlLineage = new SqlLineage();
         for (String sql: sqlList.split("(?<!\\\\);")) {
             sql = sql.replace("${", "'").replace("}", "'").replace("\\\"", " ");
-            String trim = sql.toLowerCase().trim();
-            if (trim.startsWith("set") || trim.startsWith("add") || trim.startsWith("drop")|| CheckUtil.isEmpty(trim)) {
+            String sqlTrim = sql.toLowerCase().trim();
+            if (sqlTrim.startsWith("set") || sqlTrim.startsWith("add") || sqlTrim.startsWith("drop")|| CheckUtil.isEmpty(sqlTrim)) {
                 continue;
             }
-            sqlLineage.parse(sql);
+            sqlLineage.parse(sqlTrim);
         }
     }
 }

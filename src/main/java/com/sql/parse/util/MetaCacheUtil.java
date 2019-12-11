@@ -24,13 +24,15 @@ public class MetaCacheUtil {
     private static Map<String, Long> columnMap = new HashMap<String, Long>();
 
     public void init(String table) {
-        String[] pdt = table.split("\\.");
-        List<ColumnNode> list = dao.getColumn(pdt[0], pdt[1]);
-        if (CheckUtil.notEmpty(list)) {
-            cMap.put(table.toLowerCase(), list);
-            tableMap.put(table.toLowerCase(), list.get(0).getTableId());
-            for (ColumnNode cn : list) {
-                columnMap.put((cn.getDb() + "." + cn.getTable() + "." + cn.getColumn()).toLowerCase(), cn.getId());
+        if (! cMap.containsKey(table.toLowerCase())) {
+            String[] pdt = table.split("\\.");
+            List<ColumnNode> list = dao.getColumn(pdt[0], pdt[1]);
+            if (CheckUtil.notEmpty(list)) {
+                cMap.put(table.toLowerCase(), list);
+                tableMap.put(table.toLowerCase(), list.get(0).getTableId());
+                for (ColumnNode cn : list) {
+                    columnMap.put((cn.getDb() + "." + cn.getTable() + "." + cn.getColumn()).toLowerCase(), cn.getId());
+                }
             }
         }
     }
