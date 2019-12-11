@@ -1,13 +1,36 @@
 package com.sql.parse;
 
 import com.sql.parse.lineage.SqlLineage;
+import com.sql.parse.util.CheckUtil;
 import com.sql.parse.util.FileUtil;
+import com.sql.parse.util.PropertyFileUtil;
+import org.apache.log4j.Logger;
 
 
 public class App {
+    private static Logger logger = Logger.getLogger(App.class);
+
     public static void main(String[] args) throws Exception {
-        String sql = FileUtil.read("/Users/liebaomac/IdeaProjects/sql-parser/src/main/java/com/sql/parse/test.sql");
+        // TODO 添加入库 (neo4j ? mysql ?)
+        // TODO 日志化
+        if (args.length < 2) {
+            logger.error("need properties and sql file");
+            System.exit(1);
+        }
+        String propertiesPath = args[0];
+        String sqlPath = args[1];
+        logger.info("process sql path: " + sqlPath);
+        PropertyFileUtil.init(propertiesPath);
+        String sqlList = FileUtil.read(sqlPath);
+
         SqlLineage sqlLineage = new SqlLineage();
-        sqlLineage.parse(sql);
+        for (String sql: sqlList.split("(?<!\\\\);")) {
+            sql = sql.replace("${", "'").replace("}", "'").replace("\\\"", " ");
+            String trim = sql.toLowerCase().trim();
+            if (trim.startsWith("set") || trim.startsWith("add") || trim.startsWith("drop")|| CheckUtil.isEmpty(trim)) {
+                continue;
+            }
+            sqlLineage.parse(sql);
+        }
     }
 }

@@ -4,10 +4,13 @@ import com.sql.parse.bean.ParseColumnResult;
 import org.apache.hadoop.hive.ql.parse.ASTNode;
 import org.apache.hadoop.hive.ql.parse.BaseSemanticAnalyzer;
 import org.apache.hadoop.hive.ql.parse.HiveParser;
+import org.apache.log4j.Logger;
 
 import java.util.*;
 
 public class ProcessTokSelexpr {
+    private static Logger logger = Logger.getLogger(ProcessTokSelexpr.class);
+
     private Map<String, ParseColumnResult> parseFromResult;
 
     public void setParseFromResult(Map<String, ParseColumnResult> parseFromResult) {
@@ -43,8 +46,7 @@ public class ProcessTokSelexpr {
             dependencyColumns.addAll(parseColumnResult.getFromTableColumnSet());
         } else if (ast.getType() == HiveParser.Number  || ast.getType() == HiveParser.StringLiteral
                 || ast.getType() == HiveParser.Identifier) {
-            // 这是啥情况会进入这里
-            System.out.println("WARN.. COLUMN: " + ast.getText());
+            logger.warn("WARN.. COLUMN: " + ast.getText());
         }
         return dependencyColumns;
     }
@@ -108,7 +110,7 @@ public class ProcessTokSelexpr {
                 fromColumns.addAll(parseSelectColumn(ast));
             }
         } catch (Exception e) {
-            System.out.print("column wtf: " + e + " ast: " + ast.getText() + "\n");
+            logger.warn(e + " ast: " + ast.getText());
         } finally {
             return fromColumns;
         }

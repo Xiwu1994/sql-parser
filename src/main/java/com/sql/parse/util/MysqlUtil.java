@@ -1,5 +1,7 @@
 package com.sql.parse.util;
 
+import org.apache.log4j.Logger;
+
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -9,6 +11,7 @@ import java.util.Map.Entry;
 
 
 public class MysqlUtil {
+    private static Logger logger = Logger.getLogger(MysqlUtil.class);
 
     private String driver;
     private String url;
@@ -17,10 +20,10 @@ public class MysqlUtil {
     private Connection conn;
 
     public MysqlUtil() {
-        this.driver = "com.mysql.jdbc.Driver";
-        this.url = "jdbc:mysql://127.0.0.1:3306/hive_metastore";
-        this.user = "root";
-        this.password = "root";
+        this.driver = PropertyFileUtil.getProperty("hive.metastore.mysql.driver");
+        this.url = PropertyFileUtil.getProperty("hive.metastore.mysql.url");
+        this.user = PropertyFileUtil.getProperty("hive.metastore.mysql.user");
+        this.password = PropertyFileUtil.getProperty("hive.metastore.mysql.password");
     }
 
     private void setConn() {
@@ -29,9 +32,9 @@ public class MysqlUtil {
             this.conn = DriverManager.getConnection(url, user, password);
         } catch (ClassNotFoundException classnotfoundexception) {
             classnotfoundexception.printStackTrace();
-            System.err.println("db: " + classnotfoundexception.getMessage());
+            logger.error("db: " + classnotfoundexception.getMessage());
         } catch (SQLException sqlexception) {
-            System.err.println("db.getconn(): " + sqlexception.getMessage());
+            logger.error("db.getconn(): " + sqlexception.getMessage());
         }
     }
 

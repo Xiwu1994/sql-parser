@@ -10,10 +10,13 @@ import org.apache.hadoop.hive.ql.parse.ASTNode;
 import org.apache.hadoop.hive.ql.parse.BaseSemanticAnalyzer;
 import org.apache.hadoop.hive.ql.parse.HiveParser;
 import org.apache.hadoop.hive.ql.parse.ParseDriver;
+import org.apache.log4j.Logger;
 
 import java.util.*;
 
 public class SqlLineage {
+    private static Logger logger = Logger.getLogger(SqlLineage.class);
+
     private List<ParseColumnResult> parseColumnResults = new ArrayList();
     private List<ParseTableResult> parseTableResults = new ArrayList();
     private List<ParseJoinResult> parseJoinResults = new ArrayList();
@@ -28,6 +31,18 @@ public class SqlLineage {
     private Map<String, ParseColumnResult> parseFromResult = new HashMap<>();
     private Map<String, ParseColumnResult> parseLateralViewResult = new HashMap<>();
 
+    public void clear() {
+        parseColumnResults.clear();
+        parseTableResults.clear();
+        parseJoinResults.clear();
+        parseSubQueryResults.clear();
+        insertTableColumns.clear();
+        parseQueryResults.clear();
+        parseSelectResults.clear();
+        parseUnionColumnResults.clear();
+        parseFromResult.clear();
+        parseLateralViewResult.clear();
+    }
 
     public ASTNode getASTNode(String sql) throws Exception {
         HiveConf hiveConf = new HiveConf();
@@ -37,7 +52,7 @@ public class SqlLineage {
         Context context = new Context(conf);
         ParseDriver pd = new ParseDriver();
         ASTNode ast = pd.parse(sql, context);
-        System.out.println(ast.dump());
+        logger.info(ast.dump());
         return ast;
     }
 
@@ -139,7 +154,7 @@ public class SqlLineage {
 
                 parseUnionColumnResults.clear();
                 parseQueryResults.clear();
-//                System.out.println("TOK_SUBQUERY: " + parseSubQueryResult);
+                logger.info("TOK_SUBQUERY: " + parseSubQueryResult);
                 parseSubQueryResults.add(parseSubQueryResult);
 
                 break;
@@ -194,7 +209,7 @@ public class SqlLineage {
                     }
                     parseColumnResults.clear();
                     parseSelectResults.putAll(selectResultsTmp);
-//                    System.out.println("TOK_INSERT: " + selectResultsTmp);
+                    logger.info("TOK_INSERT: " + selectResultsTmp);
                 }
                 break;
 
@@ -220,7 +235,7 @@ public class SqlLineage {
                 // from TOK_SUBQUERY or TOK_TABREF or TOK_JOIN or TOK_LATERAL_VIEW
                 // to TOK_SELEXPR
                 parseFromResult = genFromColumnData((ASTNode) ast.getChild(0));
-//                System.out.println("TOK_FROM: " + parseFromResult);
+                logger.info("TOK_FROM: " + parseFromResult);
                 break;
 
             // TOK_JOIN
@@ -250,7 +265,7 @@ public class SqlLineage {
                 parseSubQueryResults.clear();
                 parseJoinResult.setParseSubQueryResults(subQueryResults);
 
-//                System.out.println("TOK_JOIN: " + parseJoinResult);
+                logger.info("TOK_JOIN: " + parseJoinResult);
 
                 parseJoinResults.add(parseJoinResult);
 
@@ -260,7 +275,7 @@ public class SqlLineage {
             case HiveParser.TOK_TABREF:
                 // to TOK_FROM or TOK_JOIN
                 ParseTableResult parseTableResult = ProcessTokTabref.process(ast);
-//                System.out.println("TOK_TABREF: " + parseTableResult);
+                logger.info("TOK_TABREF: " + parseTableResult);
 
                 parseTableResults.add(parseTableResult);
                 break;
@@ -272,8 +287,7 @@ public class SqlLineage {
                 ProcessTokSelexpr processTokSelexpr = new ProcessTokSelexpr();
                 processTokSelexpr.setParseFromResult(parseFromResult);
                 ParseColumnResult parseColumnResult = processTokSelexpr.process(ast);
-
-//                System.out.println("TOK_SELEXPR: " + parseColumnResult);
+                logger.info("TOK_SELEXPR: " + parseColumnResult);
                 parseColumnResults.add(parseColumnResult);
                 break;
             default:
@@ -289,6 +303,7 @@ public class SqlLineage {
     }
 
     public void parse(String sql) throws Exception {
+        clear();
         ASTNode ast = getASTNode(sql);
         parseASTNode(ast);
     }
