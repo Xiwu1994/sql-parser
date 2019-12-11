@@ -127,7 +127,6 @@ public class SqlLineage {
                     // 有UNION ALL 操作
                     subQueryColumnMap = parseUnionColumnResults;
                 } else {
-                    // parseQueryResults parseQueryResults
                     subQueryColumnMap = parseQueryResults.get(0);
                 }
                 ParseSubQueryResult parseSubQueryResult = new ParseSubQueryResult();
@@ -212,7 +211,6 @@ public class SqlLineage {
                 ParseColumnResult laterViewParseColumnResult = laterViewTokSelexpr.process((ASTNode) ast.getChild(0).getChild(0));
                 parseLateralViewResult.put('.' + laterViewParseColumnResult.getAliasName(), laterViewParseColumnResult);
 
-                // 清理 TOK_SELEXPR
                 parseColumnResults.clear();
 
                 break;
@@ -235,22 +233,18 @@ public class SqlLineage {
             case HiveParser.TOK_UNIQUEJOIN:
                 // from TOK_JOIN or TOK_FROM or TOK_SUBQUERY
                 // to TOK_JOIN or TOK_FROM to TOK_SUBQUERY
-                // 生成 ParseJoinResult
                 ParseJoinResult parseJoinResult = new ParseJoinResult();
 
-                // 处理 from table
                 List<ParseTableResult> tableResults = new ArrayList<>();
                 tableResults.addAll(parseTableResults);
                 parseTableResults.clear();
                 parseJoinResult.setParseTableResults(tableResults);
 
-                // 处理 join (table or subquery)
                 List<ParseJoinResult> joinResults = new ArrayList<>();
                 joinResults.addAll(parseJoinResults);
                 parseJoinResults.clear();
                 parseJoinResult.setParseJoinResults(joinResults);
 
-                // 处理 subquery
                 List<ParseSubQueryResult> subQueryResults = new ArrayList<>();
                 subQueryResults.addAll(parseSubQueryResults);
                 parseSubQueryResults.clear();
@@ -258,7 +252,6 @@ public class SqlLineage {
 
 //                System.out.println("TOK_JOIN: " + parseJoinResult);
 
-                // 为了给之后的 JOIN 或者 SUB_QUERY 或者 FROM
                 parseJoinResults.add(parseJoinResult);
 
                 break;
