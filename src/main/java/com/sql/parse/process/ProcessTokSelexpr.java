@@ -39,7 +39,7 @@ public class ProcessTokSelexpr {
             // 字段 无别名
             // 假设只会From一个表，如果出现了多个表，则报警。 之后可以改成从元数据里读取对应字段 判断来自拿个表
             String column = BaseSemanticAnalyzer.getUnescapedName((ASTNode) ast.getChild(0));
-            ParseColumnResult parseColumnResult = getLikeByMap(parseFromResult, "."+column);
+            ParseColumnResult parseColumnResult = getLikeByMap(parseFromResult, "." + column);
             dependencyColumns.addAll(parseColumnResult.getFromTableColumnSet());
         } else if (ast.getType() == HiveParser.Number  || ast.getType() == HiveParser.StringLiteral
                 || ast.getType() == HiveParser.Identifier) {

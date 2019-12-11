@@ -3,7 +3,7 @@ select
   t1.user_type,
   product_level,
   (pay1 + pay3 + market_price + sum_discount) as pay4,
-  t2.uv
+  t2.uv + t2.qq_count + t2.email_count
 from (
   select
     user_type,
@@ -42,9 +42,13 @@ from (
 left join (
   select
     user_type,
+    count(distinct qq_s) as qq_count,
+    count(distinct email_s) as email_count,
     count(distinct user_id) as uv,
     sum(discount) as sum_discount
-  from secoo_dim.dim_user_basic_p_day_full
+  from secoo_dim.dim_user_basic_p_day_full t1
+  LATERAL VIEW explode(split(t1.qq, ',')) qq_tmp as qq_s
+  LATERAL VIEW explode(split(t1.email, ',')) email_tmp as email_s
   where p_day = '2019-12-02'
   group by user_type
 ) t2

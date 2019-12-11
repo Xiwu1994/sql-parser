@@ -5,7 +5,7 @@ import com.sql.parse.bean.ParseTableResult;
 
 import java.util.*;
 
-public class ProcessFromData {
+public class ProcessTabrefData {
     public static Map<String, ParseColumnResult> process(List<ParseTableResult> fromResults) {
         Map<String, ParseColumnResult> parseFromResult = new HashMap<>();
         for (int i = 0; i < fromResults.size(); i++) {

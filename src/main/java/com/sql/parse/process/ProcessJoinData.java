@@ -18,7 +18,7 @@ public class ProcessJoinData {
             // 处理 FROM
             if (parseJoinResult.getParseTableResults() != null) {
                 List<ParseTableResult> parseTableResults = parseJoinResult.getParseTableResults();
-                parseFromResult.putAll(ProcessFromData.process(parseTableResults));
+                parseFromResult.putAll(ProcessTabrefData.process(parseTableResults));
             }
             // 递归处理JOIN
             if (parseJoinResult.getParseJoinResults() != null) {

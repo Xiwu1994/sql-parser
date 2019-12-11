@@ -26,6 +26,8 @@ public class SqlLineage {
     private Map<String, ParseColumnResult> parseSelectResults = new HashMap<>();
     private Map<String, ParseColumnResult> parseUnionColumnResults = new HashMap<>();
     private Map<String, ParseColumnResult> parseFromResult = new HashMap<>();
+    private Map<String, ParseColumnResult> parseLateralViewResult = new HashMap<>();
+
 
     public ASTNode getASTNode(String sql) throws Exception {
         HiveConf hiveConf = new HiveConf();
@@ -40,10 +42,55 @@ public class SqlLineage {
     }
 
     public void parseChildASTNode(ASTNode ast) {
-        int childCount = ast.getChildCount();
-        for (int i = 0; i < childCount; i++) {
-            parseASTNode((ASTNode) ast.getChild(i));
+        if (ast.getToken() != null && (ast.getToken().getType() == HiveParser.TOK_LATERAL_VIEW ||
+                ast.getToken().getType() == HiveParser.TOK_LATERAL_VIEW_OUTER)) {
+            // later view 比较特殊，需要先处理 第二个节点，再返回处理 第一个节点
+            parseASTNode((ASTNode) ast.getChild(1));
+            parseASTNode((ASTNode) ast.getChild(0));
+        } else {
+            int childCount = ast.getChildCount();
+            for (int i = 0; i < childCount; i++) {
+                parseASTNode((ASTNode) ast.getChild(i));
+            }
         }
+    }
+
+    public Map<String, ParseColumnResult> genFromColumnData(ASTNode ast) {
+        Map<String, ParseColumnResult> fromColumnDataMap = null;
+        switch (ast.getToken().getType()) {
+            case HiveParser.TOK_SUBQUERY:
+                fromColumnDataMap = ProcessSubQueryData.process(parseSubQueryResults);
+                parseSubQueryResults.clear();
+                break;
+
+            case HiveParser.TOK_TABREF:
+                fromColumnDataMap = ProcessTabrefData.process(parseTableResults);
+                parseTableResults.clear();
+                break;
+
+            case HiveParser.TOK_RIGHTOUTERJOIN:
+            case HiveParser.TOK_LEFTOUTERJOIN:
+            case HiveParser.TOK_JOIN:
+            case HiveParser.TOK_LEFTSEMIJOIN:
+            case HiveParser.TOK_MAPJOIN:
+            case HiveParser.TOK_FULLOUTERJOIN:
+            case HiveParser.TOK_UNIQUEJOIN:
+                fromColumnDataMap = ProcessJoinData.process(parseJoinResults);
+                parseJoinResults.clear();
+                break;
+
+            case HiveParser.TOK_LATERAL_VIEW:
+            case HiveParser.TOK_LATERAL_VIEW_OUTER:
+                Map<String, ParseColumnResult> lateralViewResultTmp = new HashMap<>();
+                lateralViewResultTmp.putAll(parseLateralViewResult);
+                parseLateralViewResult.clear();
+                fromColumnDataMap = lateralViewResultTmp;
+                break;
+
+            default:
+                break;
+        }
+        return fromColumnDataMap;
     }
 
     public void parseCurrentASTNode(ASTNode ast) {
@@ -63,12 +110,14 @@ public class SqlLineage {
                     System.out.println("字段：" + createTableColumnName + " 依赖字段: " + createFromTableColumnSet);
                 }
                 break;
+
             // INSERT 入库表名
             case HiveParser.TOK_TAB:
                 String insertTableName = BaseSemanticAnalyzer.getUnescapedName((ASTNode) ast.getChild(0));
                 MetaCacheUtil.getInstance().init(insertTableName);
                 insertTableColumns = MetaCacheUtil.getInstance().getColumnByDBAndTable(insertTableName);
                 break;
+
             // TOK_SUBQUERY 子查询
             case HiveParser.TOK_SUBQUERY:
                 // from TOK_UNIONALL or TOK_QUERY
@@ -150,36 +199,29 @@ public class SqlLineage {
                 }
                 break;
 
+            // TOK_LATERAL_VIEW 行转列
+            case HiveParser.TOK_LATERAL_VIEW:
+            case HiveParser.TOK_LATERAL_VIEW_OUTER:
+                // from TOK_SUBQUERY or TOK_TABREF or TOK_JOIN
+                // to TOK_FROM
+                parseLateralViewResult = genFromColumnData((ASTNode) ast.getChild(1));
+
+                // 把 lateral view 生成的字段也 放进fromTableColumnMap结构里
+                ProcessTokSelexpr laterViewTokSelexpr = new ProcessTokSelexpr();
+                laterViewTokSelexpr.setParseFromResult(parseLateralViewResult);
+                ParseColumnResult laterViewParseColumnResult = laterViewTokSelexpr.process((ASTNode) ast.getChild(0).getChild(0));
+                parseLateralViewResult.put('.' + laterViewParseColumnResult.getAliasName(), laterViewParseColumnResult);
+
+                // 清理 TOK_SELEXPR
+                parseColumnResults.clear();
+
+                break;
+
             // TOK_FROM
             case HiveParser.TOK_FROM:
-                // from TOK_SUBQUERY or TOK_TABREF or TOK_JOIN
+                // from TOK_SUBQUERY or TOK_TABREF or TOK_JOIN or TOK_LATERAL_VIEW
                 // to TOK_SELEXPR
-                switch (((ASTNode) ast.getChild(0)).getToken().getType()) {
-
-                    case HiveParser.TOK_SUBQUERY:
-                        parseFromResult = ProcessSubQueryData.process(parseSubQueryResults);
-                        parseSubQueryResults.clear();
-                        break;
-
-                    case HiveParser.TOK_TABREF:
-                        parseFromResult = ProcessFromData.process(parseTableResults);
-                        parseTableResults.clear();
-                        break;
-
-                    case HiveParser.TOK_RIGHTOUTERJOIN:
-                    case HiveParser.TOK_LEFTOUTERJOIN:
-                    case HiveParser.TOK_JOIN:
-                    case HiveParser.TOK_LEFTSEMIJOIN:
-                    case HiveParser.TOK_MAPJOIN:
-                    case HiveParser.TOK_FULLOUTERJOIN:
-                    case HiveParser.TOK_UNIQUEJOIN:
-                        parseFromResult = ProcessJoinData.process(parseJoinResults);
-                        parseJoinResults.clear();
-                        break;
-                    default:
-                        break;
-                }
-
+                parseFromResult = genFromColumnData((ASTNode) ast.getChild(0));
 //                System.out.println("TOK_FROM: " + parseFromResult);
                 break;
 
