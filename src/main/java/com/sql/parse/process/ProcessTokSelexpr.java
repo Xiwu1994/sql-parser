@@ -44,9 +44,6 @@ public class ProcessTokSelexpr {
             String column = BaseSemanticAnalyzer.getUnescapedName((ASTNode) ast.getChild(0));
             ParseColumnResult parseColumnResult = getLikeByMap(parseFromResult, "." + column);
             dependencyColumns.addAll(parseColumnResult.getFromTableColumnSet());
-        } else if (ast.getType() == HiveParser.Number  || ast.getType() == HiveParser.StringLiteral
-                || ast.getType() == HiveParser.Identifier) {
-            logger.warn("WARN.. COLUMN: " + ast.getText());
         }
         return dependencyColumns;
     }
@@ -76,7 +73,9 @@ public class ProcessTokSelexpr {
                     || ast.getType() == HiveParser.PLUS || ast.getType() == HiveParser.MINUS
                     || ast.getType() == HiveParser.STAR || ast.getType() == HiveParser.MOD
                     || ast.getType() == HiveParser.AMPERSAND || ast.getType() == HiveParser.TILDE
-                    || ast.getType() == HiveParser.BITWISEOR || ast.getType() == HiveParser.BITWISEXOR) {
+                    || ast.getType() == HiveParser.BITWISEOR || ast.getType() == HiveParser.BITWISEXOR
+                    || ast.getType() == HiveParser.TOK_WINDOWSPEC || ast.getType() == HiveParser.TOK_PARTITIONINGSPEC
+                    || ast.getType() == HiveParser.TOK_ORDERBY || ast.getType() == HiveParser.TOK_TABSORTCOLNAMEASC) {
                 fromColumns.addAll(parseSelect((ASTNode) ast.getChild(0)));
                 if (ast.getChild(1) == null) { // -1
 
@@ -106,6 +105,8 @@ public class ProcessTokSelexpr {
             } else if (ast.getType() == HiveParser.LSQUARE) {
                 fromColumns.addAll(parseSelect((ASTNode) ast.getChild(0)));
                 fromColumns.addAll(parseSelect((ASTNode) ast.getChild(1)));
+            } else if (ast.getType() == HiveParser.TOK_PARTITIONINGSPEC) {
+                fromColumns.addAll(processChilds(ast, 0));
             } else {
                 fromColumns.addAll(parseSelectColumn(ast));
             }
@@ -129,14 +130,10 @@ public class ProcessTokSelexpr {
             String columnName = BaseSemanticAnalyzer.getUnescapedName((ASTNode) childAst.getChild(1));
             columnAliasName = columnName;
         } else {
-            Iterator<String> it = fromColumnSet.iterator();
-            while (it.hasNext()) {
-                String fromTableColumnFullName = it.next();
-                columnAliasName = fromTableColumnFullName.split("\\.")[fromTableColumnFullName.split("\\.").length - 1];
-                break;
-            }
+            columnAliasName = BaseSemanticAnalyzer.getUnescapedName((ASTNode) ast.getChild(0).getChild(0));
         }
         ParseColumnResult parseColumnResult = new ParseColumnResult();
+        // 如果字段有别名，用别名，没有别名，用本来的名字
         parseColumnResult.setAliasName(columnAliasName);
         parseColumnResult.setFromTableColumnSet(fromColumnSet);
         return parseColumnResult;
