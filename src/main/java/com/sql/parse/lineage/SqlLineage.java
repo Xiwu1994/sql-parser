@@ -130,14 +130,16 @@ public class SqlLineage {
             // CREATE TABLE AS 入库表名
             case HiveParser.TOK_CREATETABLE:
                 String createTableName = BaseSemanticAnalyzer.getUnescapedName((ASTNode) ast.getChild(0));
-                System.out.println("\n插入的表名: " + createTableName);
-                MetaCacheUtil.getInstance().init(createTableName);
-                insertTableColumns = MetaCacheUtil.getInstance().getColumnByDBAndTable(createTableName);
-                // 终点 create table as 步骤
-                for (int i=0; i<insertTableColumns.size(); i++) {
-                    String createTableColumnName = insertTableColumns.get(i);
-                    Set createFromTableColumnSet = parseSelectResults.get(createTableColumnName).getFromTableColumnSet();
-                    System.out.println("字段：" + createTableColumnName + " 依赖字段: " + createFromTableColumnSet);
+                if (parseSelectResults.size() > 0) {
+                    System.out.println("\n插入的表名: " + createTableName);
+                    MetaCacheUtil.getInstance().init(createTableName);
+                    insertTableColumns = MetaCacheUtil.getInstance().getColumnByDBAndTable(createTableName);
+                    // 终点 create table as 步骤
+                    for (int i=0; i<insertTableColumns.size(); i++) {
+                        String createTableColumnName = insertTableColumns.get(i);
+                        Set createFromTableColumnSet = parseSelectResults.get(createTableColumnName).getFromTableColumnSet();
+                        System.out.println("字段：" + createTableColumnName + " 依赖字段: " + createFromTableColumnSet);
+                    }
                 }
                 break;
 

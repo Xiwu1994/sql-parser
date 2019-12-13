@@ -27,10 +27,13 @@ public class App {
         for (String sql: sqlList.split("(?<!\\\\);")) {
             sql = sql.replace("${", "'").replace("}", "'").replace("\\\"", " ");
             String sqlTrim = sql.toLowerCase().trim();
-            if (sqlTrim.startsWith("set") || sqlTrim.startsWith("add") || sqlTrim.startsWith("drop")|| CheckUtil.isEmpty(sqlTrim)) {
+            if (sqlTrim.startsWith("set") || sqlTrim.startsWith("add") || sqlTrim.startsWith("drop")||
+                   sqlTrim.startsWith("LOAD") || CheckUtil.isEmpty(sqlTrim)) {
                 continue;
             }
-            sqlLineage.parse(sqlTrim);
+            if (sqlTrim.contains("select")) {
+                sqlLineage.parse(sqlTrim);
+            }
         }
     }
 }
