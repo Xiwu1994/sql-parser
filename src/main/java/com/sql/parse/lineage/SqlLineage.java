@@ -130,6 +130,7 @@ public class SqlLineage {
             // CREATE TABLE AS 入库表名
             case HiveParser.TOK_CREATETABLE:
                 String createTableName = BaseSemanticAnalyzer.getUnescapedName((ASTNode) ast.getChild(0));
+                System.out.println("\n插入的表名: " + createTableName);
                 MetaCacheUtil.getInstance().init(createTableName);
                 insertTableColumns = MetaCacheUtil.getInstance().getColumnByDBAndTable(createTableName);
                 // 终点 create table as 步骤
@@ -143,6 +144,7 @@ public class SqlLineage {
             // INSERT 入库表名
             case HiveParser.TOK_TAB:
                 String insertTableName = BaseSemanticAnalyzer.getUnescapedName((ASTNode) ast.getChild(0));
+                System.out.println("\n插入的表名: " + insertTableName);
                 MetaCacheUtil.getInstance().init(insertTableName);
                 insertTableColumns = MetaCacheUtil.getInstance().getColumnByDBAndTable(insertTableName);
                 break;
