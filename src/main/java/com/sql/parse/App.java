@@ -11,8 +11,7 @@ public class App {
     private static Logger logger = Logger.getLogger(App.class);
 
     public static void main(String[] args) throws Exception {
-        // TODO 添加入库 (neo4j ? mysql ?)
-        // TODO 日志化
+        // TODO 添加入库 neo4j ?
         if (args.length < 2) {
             logger.error("need properties and sql file");
             System.exit(1);
