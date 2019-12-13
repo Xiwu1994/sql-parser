@@ -27,7 +27,7 @@ public class App {
             sql = sql.replace("${", "'").replace("}", "'").replace("\\\"", " ");
             String sqlTrim = sql.toLowerCase().trim();
             if (sqlTrim.startsWith("set") || sqlTrim.startsWith("add") || sqlTrim.startsWith("drop")||
-                   sqlTrim.startsWith("LOAD") || CheckUtil.isEmpty(sqlTrim)) {
+                   sqlTrim.startsWith("load") || CheckUtil.isEmpty(sqlTrim)) {
                 continue;
             }
             if (sqlTrim.contains("select")) {
