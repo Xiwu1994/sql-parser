@@ -6,12 +6,18 @@ import java.sql.SQLException;
 public class DataWarehouseDao {
     MysqlUtil dbUtil = new MysqlUtil("WAREHOUSE");
 
-    public void insertColumnDependencies(String columnName, String dependencyColumn) throws SQLException {
-        String deleteSql = "delete from metadata_column_dependencies_mapping where column_name = '" + columnName + "'";
-        dbUtil.doDelete(deleteSql);
+    public void deleteColumnDependencies(String tableName) {
+        try {
+            String deleteSql = "delete from metadata_column_dependencies_mapping where table_name = '" + tableName + "'";
+            dbUtil.doDelete(deleteSql);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
 
-        String insertSql = "insert into metadata_column_dependencies_mapping(column_name, dependency_column_name) values('"
-                + columnName + "','" + dependencyColumn + "')";
+    public void insertColumnDependencies(String tableName, String columnName, String dependencyColumn) throws SQLException {
+        String insertSql = "insert into metadata_column_dependencies_mapping(table_name, column_name, dependency_column_name) " +
+                "values('" + tableName + "','" +  columnName + "','" + dependencyColumn + "')";
         dbUtil.doInsert(insertSql);
     }
 }

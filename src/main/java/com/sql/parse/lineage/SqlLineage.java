@@ -129,7 +129,7 @@ public class SqlLineage {
     public void putInColumnDependencies(String columnName, Set<String> dependenciesColumns) {
         try {
             for (String dependencyColumn : dependenciesColumns) {
-                dataWarehouseDao.insertColumnDependencies(columnName, dependencyColumn);
+                dataWarehouseDao.insertColumnDependencies(insertTable, columnName, dependencyColumn);
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -150,6 +150,7 @@ public class SqlLineage {
                     MetaCacheUtil.getInstance().init(insertTable);
                     insertTableColumns = MetaCacheUtil.getInstance().getColumnByDBAndTable(insertTable);
                     // 终点 create table as 步骤
+                    dataWarehouseDao.deleteColumnDependencies(insertTable);
                     for (int i=0; i<insertTableColumns.size(); i++) {
                         String createTableColumnName = insertTableColumns.get(i);
                         Set createFromTableColumnSet = parseSelectResults.get(createTableColumnName).getFromTableColumnSet();
@@ -204,6 +205,7 @@ public class SqlLineage {
 
                 if (insertTableColumns.size() > 0) {
                     // 终点： insert into table 步骤
+                    dataWarehouseDao.deleteColumnDependencies(insertTable);
                     for (int i = 0; i < parseColumnResults.size(); i++) {
                         String insertTableColumnName = insertTableColumns.get(i);
                         Set<String> insertFromTableColumnSet = parseColumnResults.get(i).getFromTableColumnSet();
