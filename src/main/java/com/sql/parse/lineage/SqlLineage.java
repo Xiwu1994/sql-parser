@@ -1,6 +1,7 @@
 package com.sql.parse.lineage;
 
 import com.sql.parse.bean.*;
+import com.sql.parse.dao.DataWarehouseDao;
 import com.sql.parse.process.*;
 import com.sql.parse.util.MetaCacheUtil;
 import org.apache.hadoop.conf.Configuration;
@@ -16,12 +17,15 @@ import java.util.*;
 
 public class SqlLineage {
     private static Logger logger = Logger.getLogger(SqlLineage.class);
+    private DataWarehouseDao dataWarehouseDao = new DataWarehouseDao();
 
     private List<ParseColumnResult> parseColumnResults = new ArrayList();
     private List<ParseTableResult> parseTableResults = new ArrayList();
     private List<ParseJoinResult> parseJoinResults = new ArrayList();
     private List<ParseSubQueryResult> parseSubQueryResults = new ArrayList();
 
+    // insert into table name
+    private String insertTable;
     // insert into table's column list
     private List<String> insertTableColumns = new ArrayList<>();
 
@@ -122,6 +126,16 @@ public class SqlLineage {
         return fromColumnDataMap;
     }
 
+    public void putInColumnDependencies(String columnName, Set<String> dependenciesColumns) {
+        try {
+            for (String dependencyColumn : dependenciesColumns) {
+                dataWarehouseDao.insertColumnDependencies(columnName, dependencyColumn);
+            }
+        } catch (Exception e) {
+            logger.error("insert db error.. Exception: " + e);
+        }
+    }
+
     public void parseCurrentASTNode(ASTNode ast) {
         if(ast.getToken() == null) {
             return;
@@ -129,26 +143,27 @@ public class SqlLineage {
         switch (ast.getToken().getType()) {
             // CREATE TABLE AS 入库表名
             case HiveParser.TOK_CREATETABLE:
-                String createTableName = BaseSemanticAnalyzer.getUnescapedName((ASTNode) ast.getChild(0));
+                insertTable = BaseSemanticAnalyzer.getUnescapedName((ASTNode) ast.getChild(0));
                 if (parseSelectResults.size() > 0) {
-                    System.out.println("\n插入的表名: " + createTableName);
-                    MetaCacheUtil.getInstance().init(createTableName);
-                    insertTableColumns = MetaCacheUtil.getInstance().getColumnByDBAndTable(createTableName);
+                    System.out.println("\n插入的表名: " + insertTable);
+                    MetaCacheUtil.getInstance().init(insertTable);
+                    insertTableColumns = MetaCacheUtil.getInstance().getColumnByDBAndTable(insertTable);
                     // 终点 create table as 步骤
                     for (int i=0; i<insertTableColumns.size(); i++) {
                         String createTableColumnName = insertTableColumns.get(i);
                         Set createFromTableColumnSet = parseSelectResults.get(createTableColumnName).getFromTableColumnSet();
                         System.out.println("字段：" + createTableColumnName + " 依赖字段: " + createFromTableColumnSet);
+                        putInColumnDependencies(insertTable + "." + createTableColumnName, createFromTableColumnSet);
                     }
                 }
                 break;
 
             // INSERT 入库表名
             case HiveParser.TOK_TAB:
-                String insertTableName = BaseSemanticAnalyzer.getUnescapedName((ASTNode) ast.getChild(0));
-                System.out.println("\n插入的表名: " + insertTableName);
-                MetaCacheUtil.getInstance().init(insertTableName);
-                insertTableColumns = MetaCacheUtil.getInstance().getColumnByDBAndTable(insertTableName);
+                insertTable = BaseSemanticAnalyzer.getUnescapedName((ASTNode) ast.getChild(0));
+                System.out.println("\n插入的表名: " + insertTable);
+                MetaCacheUtil.getInstance().init(insertTable);
+                insertTableColumns = MetaCacheUtil.getInstance().getColumnByDBAndTable(insertTable);
                 break;
 
             case HiveParser.TOK_UNIONALL:
@@ -192,6 +207,7 @@ public class SqlLineage {
                         String insertTableColumnName = insertTableColumns.get(i);
                         Set<String> insertFromTableColumnSet = parseColumnResults.get(i).getFromTableColumnSet();
                         System.out.println("字段：" + insertTableColumnName + " 依赖字段: " + insertFromTableColumnSet);
+                        putInColumnDependencies(insertTable + "." + insertTableColumnName, insertFromTableColumnSet);
                     }
                     parseColumnResults.clear();
                     insertTableColumns.clear();

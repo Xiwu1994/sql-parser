@@ -12,7 +12,7 @@ import java.util.Map;
 
 
 public class MetaDataDao {
-    MysqlUtil dbUtil = new MysqlUtil();
+    MysqlUtil dbUtil = new MysqlUtil("HIVE");
 
 
     public List<ColumnNode> getColumn(String db, String table) {
