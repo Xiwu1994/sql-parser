@@ -227,7 +227,7 @@ public class SqlLineage {
                     dataWarehouseDao.deleteTableDependencies(insertTable);
                     // 将表的依赖关系入库
                     putInTableDependencies();
-                    for (int i = 0; i < parseColumnResults.size(); i++) {
+                    for (int i = 0; i < insertTableColumns.size(); i++) {
                         String insertTableColumnName = insertTableColumns.get(i);
                         Set<String> insertFromTableColumnSet = parseColumnResults.get(i).getFromTableColumnSet();
                         System.out.println("字段：" + insertTableColumnName + " 依赖字段: " + insertFromTableColumnSet);

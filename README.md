@@ -23,7 +23,7 @@ pcsjob@node4018:/data/soft/sql-parser$ java -jar sql-parser-1.0-SNAPSHOT-jar-wit
 ```sql
 create table metadata_table_dependencies_mapping (
   `id` bigint(20) not null auto_increment comment "主键ID",
-  `table_name` varchar(50) not null comment "表名",
+  `table_name` varchar(255) not null comment "表名",
   `dependency_table_name` varchar(255) not null comment "依赖表名",
   primary key (`id`),
   key `idx_table_name` (`table_name`)
@@ -32,7 +32,7 @@ create table metadata_table_dependencies_mapping (
 
 create table metadata_column_dependencies_mapping (
   `id` bigint(20) not null auto_increment comment "主键ID",
-  `table_name` varchar(50) not null comment "表名",
+  `table_name` varchar(255) not null comment "表名",
   `column_name` varchar(255) not null comment "字段名（库名.表名.字段名）",
   `dependency_column_name` varchar(255) not null comment "依赖字段名（库名.表名.字段名）",
   primary key (`id`),

@@ -120,7 +120,7 @@ public class ProcessTokSelexpr {
     public ParseColumnResult process(ASTNode ast) {
         Set<String> fromColumnSet = parseSelect((ASTNode) ast.getChild(0));
         ASTNode childAst = (ASTNode) ast.getChild(0);
-        String columnAliasName = null;
+        String columnAliasName;
         if (ast.getChild(1) != null) {
             // 有字段别名
             columnAliasName = BaseSemanticAnalyzer.getUnescapedName((ASTNode) ast.getChild(1));
@@ -130,7 +130,11 @@ public class ProcessTokSelexpr {
             String columnName = BaseSemanticAnalyzer.getUnescapedName((ASTNode) childAst.getChild(1));
             columnAliasName = columnName;
         } else {
-            columnAliasName = BaseSemanticAnalyzer.getUnescapedName((ASTNode) ast.getChild(0).getChild(0));
+            if (ast.getChild(0).getChild(0) == null) {
+                columnAliasName = BaseSemanticAnalyzer.getUnescapedName((ASTNode) ast.getChild(0));
+            } else {
+                columnAliasName = BaseSemanticAnalyzer.getUnescapedName((ASTNode) ast.getChild(0).getChild(0));
+            }
         }
         ParseColumnResult parseColumnResult = new ParseColumnResult();
         // 如果字段有别名，用别名，没有别名，用本来的名字
