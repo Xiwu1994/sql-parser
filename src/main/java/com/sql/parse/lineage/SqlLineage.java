@@ -216,7 +216,16 @@ public class SqlLineage {
                 ProcessTokSelexpr laterViewTokSelexpr = new ProcessTokSelexpr();
                 laterViewTokSelexpr.setParseFromResult(parseLateralViewResult);
                 ParseColumnResult laterViewParseColumnResult = laterViewTokSelexpr.process((ASTNode) ast.getChild(0).getChild(0));
-                parseLateralViewResult.put('.' + laterViewParseColumnResult.getAliasName(), laterViewParseColumnResult);
+
+                // 判断laterview 是否有别名
+                String laterViewColumnPrefix;
+                if (ast.getChild(0).getChild(0).getChild(2) != null && ast.getChild(0).getChild(0).getChild(2).getType() == HiveParser.TOK_TABALIAS) {
+                    String latervalViewAliasName = ast.getChild(0).getChild(0).getChild(2).getChild(0).getText();
+                    laterViewColumnPrefix = latervalViewAliasName + ".";
+                } else {
+                    laterViewColumnPrefix = ".";
+                }
+                parseLateralViewResult.put(laterViewColumnPrefix + laterViewParseColumnResult.getAliasName(), laterViewParseColumnResult);
 
                 parseColumnResults.clear();
 
