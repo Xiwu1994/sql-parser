@@ -132,6 +132,7 @@ public class SqlLineage {
                 dataWarehouseDao.insertColumnDependencies(columnName, dependencyColumn);
             }
         } catch (Exception e) {
+            e.printStackTrace();
             logger.error("insert db error.. Exception: " + e);
         }
     }

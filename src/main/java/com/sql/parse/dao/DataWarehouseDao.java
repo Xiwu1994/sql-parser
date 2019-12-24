@@ -11,7 +11,7 @@ public class DataWarehouseDao {
         dbUtil.doDelete(deleteSql);
 
         String insertSql = "insert into metadata_column_dependencies_mapping(column_name, dependency_column_name) values('"
-                + columnName + "','" + dependencyColumn + "'";
+                + columnName + "','" + dependencyColumn + "')";
         dbUtil.doInsert(insertSql);
     }
 }
