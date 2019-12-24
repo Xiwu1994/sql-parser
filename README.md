@@ -19,3 +19,25 @@ pcsjob@node4018:/data/soft/sql-parser$ java -jar sql-parser-1.0-SNAPSHOT-jar-wit
 字段：secoo_price 依赖字段: [secoo_ods_mysql.ods_secooerpdb__v_t_product.secoo_price]
 ...
 ```
+
+```sql
+create table metadata_table_dependencies_mapping (
+  `id` bigint(20) not null auto_increment comment "主键ID",
+  `table_name` varchar(50) not null comment "表名",
+  `dependency_table_name` varchar(255) not null comment "依赖表名",
+  primary key (`id`),
+  key `idx_table_name` (`table_name`)
+) engine=innodb default charset=utf8mb4 comment='元数据-表依赖关系表';
+
+
+create table metadata_column_dependencies_mapping (
+  `id` bigint(20) not null auto_increment comment "主键ID",
+  `table_name` varchar(50) not null comment "表名",
+  `column_name` varchar(255) not null comment "字段名（库名.表名.字段名）",
+  `dependency_column_name` varchar(255) not null comment "依赖字段名（库名.表名.字段名）",
+  primary key (`id`),
+  key `idx_column_name` (`column_name`),
+  key `idx_table_name` (`table_name`)
+) engine=innodb default charset=utf8mb4 comment='元数据-字段依赖关系表';
+
+```

@@ -24,6 +24,8 @@ public class SqlLineage {
     private List<ParseJoinResult> parseJoinResults = new ArrayList();
     private List<ParseSubQueryResult> parseSubQueryResults = new ArrayList();
 
+    // from tables
+    private Set<String> fromTables = new HashSet<>();
     // insert into table name
     private String insertTable;
     // insert into table's column list
@@ -44,6 +46,7 @@ public class SqlLineage {
     }
 
     public void clear() {
+        fromTables.clear();
         parseColumnResults.clear();
         parseTableResults.clear();
         parseJoinResults.clear();
@@ -126,6 +129,17 @@ public class SqlLineage {
         return fromColumnDataMap;
     }
 
+    public void putInTableDependencies() {
+        try {
+            for (String dependencyTable : fromTables) {
+                dataWarehouseDao.insertTableDependencies(insertTable, dependencyTable);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            logger.error("insert db error.. Exception: " + e);
+        }
+    }
+
     public void putInColumnDependencies(String columnName, Set<String> dependenciesColumns) {
         try {
             for (String dependencyColumn : dependenciesColumns) {
@@ -151,10 +165,14 @@ public class SqlLineage {
                     insertTableColumns = MetaCacheUtil.getInstance().getColumnByDBAndTable(insertTable);
                     // 终点 create table as 步骤
                     dataWarehouseDao.deleteColumnDependencies(insertTable);
+                    dataWarehouseDao.deleteTableDependencies(insertTable);
+                    // 将表的依赖关系入库
+                    putInTableDependencies();
                     for (int i=0; i<insertTableColumns.size(); i++) {
                         String createTableColumnName = insertTableColumns.get(i);
                         Set createFromTableColumnSet = parseSelectResults.get(createTableColumnName).getFromTableColumnSet();
                         System.out.println("字段：" + createTableColumnName + " 依赖字段: " + createFromTableColumnSet);
+                        // 将字段的依赖关系入库
                         putInColumnDependencies(insertTable + "." + createTableColumnName, createFromTableColumnSet);
                     }
                 }
@@ -206,10 +224,14 @@ public class SqlLineage {
                 if (insertTableColumns.size() > 0) {
                     // 终点： insert into table 步骤
                     dataWarehouseDao.deleteColumnDependencies(insertTable);
+                    dataWarehouseDao.deleteTableDependencies(insertTable);
+                    // 将表的依赖关系入库
+                    putInTableDependencies();
                     for (int i = 0; i < parseColumnResults.size(); i++) {
                         String insertTableColumnName = insertTableColumns.get(i);
                         Set<String> insertFromTableColumnSet = parseColumnResults.get(i).getFromTableColumnSet();
                         System.out.println("字段：" + insertTableColumnName + " 依赖字段: " + insertFromTableColumnSet);
+                        // 将字段的依赖关系入库
                         putInColumnDependencies(insertTable + "." + insertTableColumnName, insertFromTableColumnSet);
                     }
                     parseColumnResults.clear();
@@ -293,6 +315,8 @@ public class SqlLineage {
 
             // TOK_TABREF
             case HiveParser.TOK_TABREF:
+                String fromTableName = BaseSemanticAnalyzer.getUnescapedName((ASTNode) ast.getChild(0));
+                fromTables.add(fromTableName);
                 // to TOK_FROM or TOK_JOIN
                 ParseTableResult parseTableResult = ProcessTokTabref.process(ast);
                 logger.debug("TOK_TABREF: " + parseTableResult);
