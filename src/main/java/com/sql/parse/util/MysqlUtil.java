@@ -19,11 +19,17 @@ public class MysqlUtil {
     private String password;
     private Connection conn;
 
-    public MysqlUtil() {
-        this.driver = PropertyFileUtil.getProperty("hive.metastore.mysql.driver");
-        this.url = PropertyFileUtil.getProperty("hive.metastore.mysql.url");
-        this.user = PropertyFileUtil.getProperty("hive.metastore.mysql.user");
-        this.password = PropertyFileUtil.getProperty("hive.metastore.mysql.password");
+    public MysqlUtil(String dbType) {
+        String propertyPrefix = "";
+        if (dbType == "HIVE") {
+            propertyPrefix = "hive.metastore";
+        } else if (dbType == "WAREHOUSE") {
+            propertyPrefix = "data.warehouse";
+        }
+        this.driver = PropertyFileUtil.getProperty(propertyPrefix + ".mysql.driver");
+        this.url = PropertyFileUtil.getProperty(propertyPrefix + ".mysql.url");
+        this.user = PropertyFileUtil.getProperty(propertyPrefix + ".mysql.user");
+        this.password = PropertyFileUtil.getProperty(propertyPrefix + ".mysql.password");
     }
 
     private void setConn() {
@@ -38,15 +44,15 @@ public class MysqlUtil {
         }
     }
 
-    public int doInsert(String sql) throws Exception {
+    public int doInsert(String sql) throws SQLException {
         return doUpdate(sql);
     }
 
-    public int doDelete(String sql) throws Exception {
+    public int doDelete(String sql) throws SQLException {
         return doUpdate(sql);
     }
 
-    public int doUpdate(String sql) throws Exception {
+    public int doUpdate(String sql) throws SQLException {
         Statement stmt = null;
         try {
             setConn();
@@ -60,7 +66,7 @@ public class MysqlUtil {
         }
     }
 
-    public List<Map<String, Object>> doSelect(String sql) throws Exception {
+    public List<Map<String, Object>> doSelect(String sql) throws SQLException {
         Statement stmt = null;
         ResultSet rs = null;
         try {
@@ -95,7 +101,7 @@ public class MysqlUtil {
         return map;
     }
 
-    public void close(ResultSet rs, Statement stmt) throws Exception {
+    public void close(ResultSet rs, Statement stmt) throws SQLException {
         if (rs != null) {
             rs.close();
         }
@@ -109,7 +115,7 @@ public class MysqlUtil {
 
     public static void main(String[] args) {
         try {
-            MysqlUtil db = new MysqlUtil();
+            MysqlUtil db = new MysqlUtil("HIVE");
             List<Map<String, Object>> rs = db.doSelect("select * from t_user limit 5");
             for (Map<String, Object> map : rs) {
                 for (Entry<String, Object> entry : map.entrySet()) {
