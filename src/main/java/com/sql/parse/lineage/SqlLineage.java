@@ -19,6 +19,7 @@ public class SqlLineage {
     private static Logger logger = Logger.getLogger(SqlLineage.class);
     private DataWarehouseDao dataWarehouseDao = new DataWarehouseDao();
 
+    private Map<String, ParseColumnResult> parseAllColref = new HashMap<>();
     private List<ParseColumnResult> parseColumnResults = new ArrayList();
     private List<ParseTableResult> parseTableResults = new ArrayList();
     private List<ParseJoinResult> parseJoinResults = new ArrayList();
@@ -170,11 +171,19 @@ public class SqlLineage {
                     putInTableDependencies();
                     for (int i=0; i<insertTableColumns.size(); i++) {
                         String createTableColumnName = insertTableColumns.get(i);
-                        Set createFromTableColumnSet = parseSelectResults.get(createTableColumnName).getFromTableColumnSet();
+                        Set createFromTableColumnSet = null;
+                        if (parseAllColref.size() > 0) {
+                            if (parseAllColref.containsKey(createTableColumnName)) {
+                                createFromTableColumnSet = parseAllColref.get(createTableColumnName).getFromTableColumnSet();
+                            }
+                        } else {
+                            createFromTableColumnSet = parseSelectResults.get(createTableColumnName).getFromTableColumnSet();
+                        }
                         System.out.println("字段：" + createTableColumnName + " 依赖字段: " + createFromTableColumnSet);
                         // 将字段的依赖关系入库
                         putInColumnDependencies(insertTable + "." + createTableColumnName, createFromTableColumnSet);
                     }
+                    parseAllColref.clear();
                 }
                 break;
 
@@ -233,13 +242,25 @@ public class SqlLineage {
                     dataWarehouseDao.deleteTableDependencies(insertTable);
                     // 将表的依赖关系入库
                     putInTableDependencies();
+
                     for (int i = 0; i < insertTableColumns.size(); i++) {
                         String insertTableColumnName = insertTableColumns.get(i);
-                        Set<String> insertFromTableColumnSet = parseColumnResults.get(i).getFromTableColumnSet();
+                        Set<String> insertFromTableColumnSet = null;
+                        if (parseAllColref.size() > 0) {
+                            // 判断是否是 select * 入库方式
+                            // TODO: parseFromResult 应该改成List类型，因为select * 是有顺序的。但是改动太大了..
+                            // TODO: insert table1 select * from table2  如果table1和table2的字段名不一样，字段血缘 解析不出
+                            if (parseAllColref.containsKey(insertTableColumnName)) {
+                                insertFromTableColumnSet = parseAllColref.get(insertTableColumnName).getFromTableColumnSet();
+                            }
+                        } else {
+                            insertFromTableColumnSet = parseColumnResults.get(i).getFromTableColumnSet();
+                        }
                         System.out.println("字段：" + insertTableColumnName + " 依赖字段: " + insertFromTableColumnSet);
                         // 将字段的依赖关系入库
                         putInColumnDependencies(insertTable + "." + insertTableColumnName, insertFromTableColumnSet);
                     }
+                    parseAllColref.clear();
                     parseColumnResults.clear();
                     insertTableColumns.clear();
                 } else {
@@ -334,11 +355,19 @@ public class SqlLineage {
             case HiveParser.TOK_SELEXPR:
                 // from TOK_FROM
                 // to TOK_INSERT
-                ProcessTokSelexpr processTokSelexpr = new ProcessTokSelexpr();
-                processTokSelexpr.setParseFromResult(parseFromResult);
-                ParseColumnResult parseColumnResult = processTokSelexpr.process(ast);
-                logger.debug("TOK_SELEXPR: " + parseColumnResult);
-                parseColumnResults.add(parseColumnResult);
+                if (ast.getChild(0).getType() == HiveParser.TOK_ALLCOLREF) {
+                    // 判断是否是 select *
+                    for(Map.Entry<String, ParseColumnResult> entry : parseFromResult.entrySet()){
+                        ParseColumnResult parseColumnResult = entry.getValue();
+                        parseAllColref.put(parseColumnResult.getAliasName(), parseColumnResult);
+                    }
+                } else {
+                    ProcessTokSelexpr processTokSelexpr = new ProcessTokSelexpr();
+                    processTokSelexpr.setParseFromResult(parseFromResult);
+                    ParseColumnResult parseColumnResult = processTokSelexpr.process(ast);
+                    logger.debug("TOK_SELEXPR: " + parseColumnResult);
+                    parseColumnResults.add(parseColumnResult);
+                }
                 break;
             default:
                 break;
