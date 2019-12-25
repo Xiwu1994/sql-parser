@@ -187,8 +187,8 @@ public class SqlLineage {
                 break;
 
             case HiveParser.TOK_UNIONALL:
-                // from TOK_QUERY
-                // to TOK_SUBQUERY
+                // from TOK_QUERY or TOK_UNIONALL
+                // to TOK_SUBQUERY or TOK_UNIONALL
                 Map<String, ParseColumnResult> newParseColumnResultMap = new HashMap<>();
 
                 Map<String, ParseColumnResult> parseColumnResultMap = parseQueryResults.get(0);
@@ -196,9 +196,15 @@ public class SqlLineage {
                 for(Map.Entry<String, ParseColumnResult> entry : parseColumnResultMap.entrySet()){
                     String columnAliasName = entry.getKey();
                     ParseColumnResult parseColumnResult = entry.getValue();
-
-                    for (int i=1; i<parseQueryResults.size(); i++) {
-                        Set<String> otherUnionFromColumnSet = parseQueryResults.get(i).get(columnAliasName).getFromTableColumnSet();
+                    // (TOK_QUERY) UNION ALL (TOK_QUERY)
+                    if (parseQueryResults.size() == 2) {
+                        Set<String> otherUnionFromColumnSet = parseQueryResults.get(1).get(columnAliasName).getFromTableColumnSet();
+                        parseColumnResult.getFromTableColumnSet().addAll(otherUnionFromColumnSet);
+                        newParseColumnResultMap.put(columnAliasName, parseColumnResult);
+                    }
+                    // (TOK_UNIONALL) UNION ALL (TOK_QUERY)
+                    if (parseUnionColumnResults.size() > 0) {
+                        Set<String> otherUnionFromColumnSet = parseUnionColumnResults.get(columnAliasName).getFromTableColumnSet();
                         parseColumnResult.getFromTableColumnSet().addAll(otherUnionFromColumnSet);
                         newParseColumnResultMap.put(columnAliasName, parseColumnResult);
                     }
