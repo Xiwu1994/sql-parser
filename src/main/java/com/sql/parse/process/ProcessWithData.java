@@ -13,6 +13,9 @@ public class ProcessWithData {
         for (int i = 0; i < withResults.size(); i++) {
             ParseWithResult parseWithResult = withResults.get(i);
             String subQueryAliasName = parseWithResult.getAliasName();
+            if (subQueryAliasName == null) {
+                subQueryAliasName = parseWithResult.getTableName();
+            }
             Map<String, ParseColumnResult> parseColumnResultMap = parseWithResult.getParseSubQueryResults();
 
             for(Map.Entry<String, ParseColumnResult> entry : parseColumnResultMap.entrySet()){

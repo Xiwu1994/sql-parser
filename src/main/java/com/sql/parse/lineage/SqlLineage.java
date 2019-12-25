@@ -92,16 +92,20 @@ public class SqlLineage {
             parseASTNode((ASTNode) ast.getChild(0));
         } else if (ast.getToken() != null && (ast.getToken().getType() == HiveParser.TOK_QUERY && ast.getChild(2) != null && ast.getChild(2).getType() == HiveParser.TOK_CTE)) {
             // 判断是否有 with 生成的临时表，优先处理建表语句(SUBQUERY)
-            parseASTNode((ASTNode) ast.getChild(2));
 
-            for (int i=0; i<parseSubQueryResults.size(); i++) {
-                ParseWithResult parseWithResult = new ParseWithResult();
-                parseWithResult.setTableName(parseSubQueryResults.get(i).getAliasName());
-                Map<String, ParseColumnResult> parseSubQueryResultTmp = new HashMap<>();
-                parseSubQueryResultTmp.putAll(parseSubQueryResults.get(i).getParseSubQueryResults());
-                parseWithResult.setParseSubQueryResults(parseSubQueryResultTmp);
-                parseWithResults.add(parseWithResult);
+            for (int i=0; i < ast.getChild(2).getChildCount(); i++) {
+                parseASTNode((ASTNode) ast.getChild(2).getChild(i));
+
+                for (int j=i; j<parseSubQueryResults.size();j++) {
+                    ParseWithResult parseWithResult = new ParseWithResult();
+                    parseWithResult.setTableName(parseSubQueryResults.get(i).getAliasName());
+                    Map<String, ParseColumnResult> parseSubQueryResultTmp = new HashMap<>();
+                    parseSubQueryResultTmp.putAll(parseSubQueryResults.get(i).getParseSubQueryResults());
+                    parseWithResult.setParseSubQueryResults(parseSubQueryResultTmp);
+                    parseWithResults.add(parseWithResult);
+                }
             }
+
             parseSubQueryResults.clear();
 
             parseASTNode((ASTNode) ast.getChild(0));
@@ -123,9 +127,14 @@ public class SqlLineage {
                 break;
 
             case HiveParser.TOK_TABREF:
-                if (parseWithResults.size() > 0) {
-                    fromColumnDataMap = ProcessWithData.process(parseWithResults);
-//                    parseWithResults.clear();
+                if (ast.getChild(0).getChildCount() == 1) {
+                    String tableName = BaseSemanticAnalyzer.getUnescapedName((ASTNode) ast.getChild(0).getChild(0));
+                    for (int i=0; i<parseWithResults.size(); i++) {
+                        if (parseWithResults.get(i).getTableName().equals(tableName)) {
+                            fromColumnDataMap = ProcessWithData.process(parseWithResults);
+                            break;
+                        }
+                    }
                 } else {
                     fromColumnDataMap = ProcessTabrefData.process(parseTableResults);
                     parseTableResults.clear();
