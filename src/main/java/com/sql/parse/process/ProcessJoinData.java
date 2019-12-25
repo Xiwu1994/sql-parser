@@ -1,9 +1,6 @@
 package com.sql.parse.process;
 
-import com.sql.parse.bean.ParseColumnResult;
-import com.sql.parse.bean.ParseJoinResult;
-import com.sql.parse.bean.ParseSubQueryResult;
-import com.sql.parse.bean.ParseTableResult;
+import com.sql.parse.bean.*;
 
 import java.util.HashMap;
 import java.util.List;
@@ -28,6 +25,11 @@ public class ProcessJoinData {
             if (parseJoinResult.getParseSubQueryResults() != null) {
                 List<ParseSubQueryResult> parseSubQueryResults = parseJoinResult.getParseSubQueryResults();
                 parseFromResult.putAll(ProcessSubQueryData.process(parseSubQueryResults));
+            }
+            // 处理 WITH
+            if (parseJoinResult.getParseWithResults() != null) {
+                List<ParseWithResult> parseWiteResults = parseJoinResult.getParseWithResults();
+                parseFromResult.putAll(ProcessWithData.process(parseWiteResults));
             }
         }
         return parseFromResult;
