@@ -1,6 +1,7 @@
 package com.sql.parse.process;
 
 import com.sql.parse.bean.ParseColumnResult;
+import com.sql.parse.bean.ParseWithResult;
 import org.apache.hadoop.hive.ql.parse.ASTNode;
 import org.apache.hadoop.hive.ql.parse.BaseSemanticAnalyzer;
 import org.apache.hadoop.hive.ql.parse.HiveParser;
@@ -75,13 +76,10 @@ public class ProcessTokSelexpr {
                     || ast.getType() == HiveParser.AMPERSAND || ast.getType() == HiveParser.TILDE
                     || ast.getType() == HiveParser.BITWISEOR || ast.getType() == HiveParser.BITWISEXOR
                     || ast.getType() == HiveParser.TOK_WINDOWSPEC || ast.getType() == HiveParser.TOK_PARTITIONINGSPEC
-                    || ast.getType() == HiveParser.TOK_ORDERBY || ast.getType() == HiveParser.TOK_TABSORTCOLNAMEASC) {
-                fromColumns.addAll(parseSelect((ASTNode) ast.getChild(0)));
-                if (ast.getChild(1) == null) { // -1
+                    || ast.getType() == HiveParser.TOK_ORDERBY || ast.getType() == HiveParser.TOK_TABSORTCOLNAMEASC
+                    || ast.getType() == HiveParser.TOK_DISTRIBUTEBY || ast.getType() == HiveParser.TOK_TABSORTCOLNAMEDESC) {
+                fromColumns.addAll(processChilds(ast, 0));
 
-                } else {
-                    fromColumns.addAll(parseSelect((ASTNode) ast.getChild(1)));
-                }
             } else if (ast.getType() == HiveParser.TOK_FUNCTIONDI) {
                 fromColumns.addAll(parseSelect((ASTNode) ast.getChild(1)));
             } else if (ast.getType() == HiveParser.TOK_FUNCTION) {
@@ -118,6 +116,7 @@ public class ProcessTokSelexpr {
     }
 
     public ParseColumnResult process(ASTNode ast) {
+        int childIndex = ast.getChildIndex();
         Set<String> fromColumnSet = parseSelect((ASTNode) ast.getChild(0));
         ASTNode childAst = (ASTNode) ast.getChild(0);
         String columnAliasName;
@@ -129,15 +128,15 @@ public class ProcessTokSelexpr {
             // 没有别名，但是使用的 t1.xx 格式
             String columnName = BaseSemanticAnalyzer.getUnescapedName((ASTNode) childAst.getChild(1));
             columnAliasName = columnName;
+        } else if (childAst.getToken().getType() == HiveParser.TOK_TABLE_OR_COL) {
+            // select column
+            columnAliasName = BaseSemanticAnalyzer.getUnescapedName((ASTNode) childAst.getChild(0));
         } else {
-            if (ast.getChild(0).getChild(0) == null) {
-                columnAliasName = BaseSemanticAnalyzer.getUnescapedName((ASTNode) ast.getChild(0));
-            } else {
-                columnAliasName = BaseSemanticAnalyzer.getUnescapedName((ASTNode) ast.getChild(0).getChild(0));
-            }
+            // 使用的元数据获取到的 insert table 的字段
+            columnAliasName = "col_" + childIndex;
         }
         ParseColumnResult parseColumnResult = new ParseColumnResult();
-        // 如果字段有别名，用别名，没有别名，用本来的名字
+        parseColumnResult.setIndex(childIndex);
         parseColumnResult.setAliasName(columnAliasName);
         parseColumnResult.setFromTableColumnSet(fromColumnSet);
         return parseColumnResult;

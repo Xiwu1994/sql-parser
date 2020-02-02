@@ -84,6 +84,19 @@ public class SqlLineage {
         return ast;
     }
 
+    private ParseColumnResult getIndexColumnResult(Map<String, ParseColumnResult> parseColumnMap, int childIndex) {
+        ParseColumnResult indexParseColumnResult = null;
+        for(Map.Entry<String, ParseColumnResult> entry : parseColumnMap.entrySet()){
+            String aliasName = entry.getKey();
+            ParseColumnResult parseColumnResult = entry.getValue();
+            if (parseColumnResult.getIndex() == childIndex) {
+                indexParseColumnResult = parseColumnMap.get(aliasName);
+                break;
+            }
+        }
+        return indexParseColumnResult;
+    }
+
     public void parseChildASTNode(ASTNode ast) {
         if (ast.getToken() != null && (ast.getToken().getType() == HiveParser.TOK_LATERAL_VIEW ||
                 ast.getToken().getType() == HiveParser.TOK_LATERAL_VIEW_OUTER)) {
@@ -209,11 +222,9 @@ public class SqlLineage {
                         String createTableColumnName = insertTableColumns.get(i);
                         Set createFromTableColumnSet = null;
                         if (parseAllColref.size() > 0) {
-                            if (parseAllColref.containsKey(createTableColumnName)) {
-                                createFromTableColumnSet = parseAllColref.get(createTableColumnName).getFromTableColumnSet();
-                            }
+                            createFromTableColumnSet = getIndexColumnResult(parseAllColref, i).getFromTableColumnSet();
                         } else {
-                            createFromTableColumnSet = parseSelectResults.get(createTableColumnName).getFromTableColumnSet();
+                            createFromTableColumnSet = getIndexColumnResult(parseSelectResults, i).getFromTableColumnSet();
                         }
                         System.out.println("字段：" + createTableColumnName + " 依赖字段: " + createFromTableColumnSet);
                         // 将字段的依赖关系入库
@@ -241,15 +252,18 @@ public class SqlLineage {
                 for(Map.Entry<String, ParseColumnResult> entry : parseColumnResultMap.entrySet()){
                     String columnAliasName = entry.getKey();
                     ParseColumnResult parseColumnResult = entry.getValue();
+                    int childIndex = parseColumnResult.getIndex();
                     // (TOK_QUERY) UNION ALL (TOK_QUERY)
                     if (parseQueryResults.size() == 2) {
-                        Set<String> otherUnionFromColumnSet = parseQueryResults.get(1).get(columnAliasName).getFromTableColumnSet();
+                        Set<String> otherUnionFromColumnSet = getIndexColumnResult(parseQueryResults.get(1),
+                                childIndex).getFromTableColumnSet();
                         parseColumnResult.getFromTableColumnSet().addAll(otherUnionFromColumnSet);
                         newParseColumnResultMap.put(columnAliasName, parseColumnResult);
                     }
                     // (TOK_UNIONALL) UNION ALL (TOK_QUERY)
                     if (parseUnionColumnResults.size() > 0) {
-                        Set<String> otherUnionFromColumnSet = parseUnionColumnResults.get(columnAliasName).getFromTableColumnSet();
+                        Set<String> otherUnionFromColumnSet = getIndexColumnResult(parseUnionColumnResults,
+                                childIndex).getFromTableColumnSet();
                         parseColumnResult.getFromTableColumnSet().addAll(otherUnionFromColumnSet);
                         newParseColumnResultMap.put(columnAliasName, parseColumnResult);
                     }
@@ -286,9 +300,7 @@ public class SqlLineage {
                             // 判断是否是 select * 入库方式
                             // TODO: parseFromResult 应该改成List类型，因为select * 是有顺序的。但是改动太大了..
                             // TODO: insert table1 select * from table2  如果table1和table2的字段名不一样，字段血缘 解析不出
-                            if (parseAllColref.containsKey(insertTableColumnName)) {
-                                insertFromTableColumnSet = parseAllColref.get(insertTableColumnName).getFromTableColumnSet();
-                            }
+                            insertFromTableColumnSet = getIndexColumnResult(parseAllColref, i).getFromTableColumnSet();
                         } else {
                             insertFromTableColumnSet = parseColumnResults.get(i).getFromTableColumnSet();
                         }
@@ -300,11 +312,21 @@ public class SqlLineage {
                     parseColumnResults.clear();
                     insertTableColumns.clear();
                 } else {
-                    for (int i = 0; i < parseColumnResults.size(); i++) {
-                        selectResultsTmp.put(parseColumnResults.get(i).getAliasName(), parseColumnResults.get(i));
+                    if (parseColumnResults.size() != 0) {
+                        for (int i = 0; i < parseColumnResults.size(); i++) {
+                            selectResultsTmp.put(parseColumnResults.get(i).getAliasName(), parseColumnResults.get(i));
+                        }
+                        parseColumnResults.clear();
+                        parseSelectResults.putAll(selectResultsTmp);
+                    } else if (parseAllColref.size() != 0) {
+                        for(Map.Entry<String, ParseColumnResult> entry : parseAllColref.entrySet()){
+                            String aliasName = entry.getKey();
+                            ParseColumnResult parseColumnResult = entry.getValue();
+                            selectResultsTmp.put(aliasName, parseColumnResult);
+                        }
+                        parseAllColref.clear();
+                        parseSelectResults.putAll(selectResultsTmp);
                     }
-                    parseColumnResults.clear();
-                    parseSelectResults.putAll(selectResultsTmp);
                     logger.debug("TOK_INSERT: " + selectResultsTmp);
                 }
                 break;
