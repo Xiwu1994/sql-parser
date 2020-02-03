@@ -298,11 +298,13 @@ public class SqlLineage {
                         Set<String> insertFromTableColumnSet = null;
                         if (parseAllColref.size() > 0) {
                             // 判断是否是 select * 入库方式
-                            // TODO: parseFromResult 应该改成List类型，因为select * 是有顺序的。但是改动太大了..
-                            // TODO: insert table1 select * from table2  如果table1和table2的字段名不一样，字段血缘 解析不出
                             insertFromTableColumnSet = getIndexColumnResult(parseAllColref, i).getFromTableColumnSet();
                         } else {
-                            insertFromTableColumnSet = parseColumnResults.get(i).getFromTableColumnSet();
+                            if (i < parseColumnResults.size()) {
+                                insertFromTableColumnSet = parseColumnResults.get(i).getFromTableColumnSet();
+                            } else {
+                                insertFromTableColumnSet = new HashSet<>();
+                            }
                         }
                         System.out.println("字段：" + insertTableColumnName + " 依赖字段: " + insertFromTableColumnSet);
                         // 将字段的依赖关系入库
@@ -318,7 +320,8 @@ public class SqlLineage {
                         }
                         parseColumnResults.clear();
                         parseSelectResults.putAll(selectResultsTmp);
-                    } else if (parseAllColref.size() != 0) {
+                    }
+                    if (parseAllColref.size() != 0) {
                         for(Map.Entry<String, ParseColumnResult> entry : parseAllColref.entrySet()){
                             String aliasName = entry.getKey();
                             ParseColumnResult parseColumnResult = entry.getValue();
@@ -430,10 +433,12 @@ public class SqlLineage {
             case HiveParser.TOK_SELEXPR:
                 // from TOK_FROM
                 // to TOK_INSERT
+                int childIndex = ast.getChildIndex();
                 if (ast.getChild(0).getType() == HiveParser.TOK_ALLCOLREF) {
                     // 判断是否是 select *
                     for(Map.Entry<String, ParseColumnResult> entry : parseFromResult.entrySet()){
                         ParseColumnResult parseColumnResult = entry.getValue();
+                        parseColumnResult.setIndex(parseColumnResult.getIndex() + childIndex);
                         parseAllColref.put(parseColumnResult.getAliasName(), parseColumnResult);
                     }
                 } else {

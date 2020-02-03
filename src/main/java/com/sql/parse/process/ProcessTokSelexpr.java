@@ -1,7 +1,6 @@
 package com.sql.parse.process;
 
 import com.sql.parse.bean.ParseColumnResult;
-import com.sql.parse.bean.ParseWithResult;
 import org.apache.hadoop.hive.ql.parse.ASTNode;
 import org.apache.hadoop.hive.ql.parse.BaseSemanticAnalyzer;
 import org.apache.hadoop.hive.ql.parse.HiveParser;
@@ -18,106 +17,56 @@ public class ProcessTokSelexpr {
         this.parseFromResult = parseFromResult;
     }
 
-    public static ParseColumnResult getLikeByMap(Map<String, ParseColumnResult> map, String keyLike){
+    public static ParseColumnResult getResultByColumn(Map<String, ParseColumnResult> map, String column){
         ParseColumnResult parseColumnResult = null;
         for (Map.Entry<String, ParseColumnResult> entity : map.entrySet()) {
-            if(entity.getKey().indexOf(keyLike) > -1){
+            String columnName = entity.getKey();
+            if (columnName.contains(".")) {
+                columnName = columnName.split("\\.")[1];
+            }
+            if (columnName.equals(column)) {
                 parseColumnResult = entity.getValue();
             }
         }
         return parseColumnResult;
     }
 
-    public Set<String> parseSelectColumn(ASTNode ast) {
-        Set<String> dependencyColumns = new TreeSet<>();
+    public Set<String> parseSelect(ASTNode ast) {
+        // 依赖的字段列表
+        Set<String> fromColumns = new TreeSet();
+
         if (ast.getType() == HiveParser.DOT && ast.getChild(0).getType() == HiveParser.TOK_TABLE_OR_COL
                 && ast.getChild(0).getChildCount() == 1 && ast.getChild(1).getType() == HiveParser.Identifier) {
             // 字段 有别名
             String column = BaseSemanticAnalyzer.getUnescapedName((ASTNode) ast.getChild(1));
             String alias = BaseSemanticAnalyzer.getUnescapedName((ASTNode) ast.getChild(0).getChild(0));
 
-            // 字段的依赖情况
-            dependencyColumns.addAll(parseFromResult.get(alias + "." + column).getFromTableColumnSet());
-        } else if (ast.getType() == HiveParser.TOK_TABLE_OR_COL  && ast.getChildCount() == 1
+            String columnFull = alias + "." + column;
+            if (parseFromResult.containsKey(columnFull)) {
+                fromColumns.addAll(parseFromResult.get(columnFull).getFromTableColumnSet());
+            } else {
+                logger.error("columnFull: " + columnFull + "has no source..");
+            }
+        } else if (ast.getType() == HiveParser.TOK_TABLE_OR_COL && ast.getChildCount() == 1
                 && ast.getChild(0).getType() == HiveParser.Identifier) {
             // 字段 无别名
-            // 假设只会From一个表，如果出现了多个表，则报警。 之后可以改成从元数据里读取对应字段 判断来自拿个表
             String column = BaseSemanticAnalyzer.getUnescapedName((ASTNode) ast.getChild(0));
-            ParseColumnResult parseColumnResult = getLikeByMap(parseFromResult, "." + column);
-            dependencyColumns.addAll(parseColumnResult.getFromTableColumnSet());
-        }
-        return dependencyColumns;
-    }
-
-    public Set<String> processChilds(ASTNode ast, int startIndex) {
-        // 依赖的字段列表processChilds
-        Set<String> fromColumns = new TreeSet();
-        int cnt = ast.getChildCount();
-        for (int i = startIndex; i < cnt; i++) {
-            fromColumns.addAll(parseSelect((ASTNode) ast.getChild(i)));
+            ParseColumnResult parseColumnResult = getResultByColumn(parseFromResult, column);
+            if (parseColumnResult != null) {
+                fromColumns.addAll(parseColumnResult.getFromTableColumnSet());
+            }
+        } else {
+            int cnt = ast.getChildCount();
+            for (int i = 0; i < cnt; i++) {
+                fromColumns.addAll(parseSelect((ASTNode) ast.getChild(i)));
+            }
         }
         return fromColumns;
     }
 
-    public Set<String> parseSelect(ASTNode ast) {
-        // 依赖的字段列表
-        Set<String> fromColumns = new TreeSet();
-        try {
-            if (ast.getType() == HiveParser.KW_OR
-                    || ast.getType() == HiveParser.KW_AND) {
-                fromColumns.addAll(parseSelect((ASTNode) ast.getChild(0)));
-                fromColumns.addAll(parseSelect((ASTNode) ast.getChild(1)));
-            } else if (ast.getType() == HiveParser.NOTEQUAL || ast.getType() == HiveParser.EQUAL
-                    || ast.getType() == HiveParser.LESSTHAN || ast.getType() == HiveParser.LESSTHANOREQUALTO
-                    || ast.getType() == HiveParser.GREATERTHAN || ast.getType() == HiveParser.GREATERTHANOREQUALTO
-                    || ast.getType() == HiveParser.KW_LIKE || ast.getType() == HiveParser.DIVIDE
-                    || ast.getType() == HiveParser.PLUS || ast.getType() == HiveParser.MINUS
-                    || ast.getType() == HiveParser.STAR || ast.getType() == HiveParser.MOD
-                    || ast.getType() == HiveParser.AMPERSAND || ast.getType() == HiveParser.TILDE
-                    || ast.getType() == HiveParser.BITWISEOR || ast.getType() == HiveParser.BITWISEXOR
-                    || ast.getType() == HiveParser.TOK_WINDOWSPEC || ast.getType() == HiveParser.TOK_PARTITIONINGSPEC
-                    || ast.getType() == HiveParser.TOK_ORDERBY || ast.getType() == HiveParser.TOK_TABSORTCOLNAMEASC
-                    || ast.getType() == HiveParser.TOK_DISTRIBUTEBY || ast.getType() == HiveParser.TOK_TABSORTCOLNAMEDESC) {
-                fromColumns.addAll(processChilds(ast, 0));
-
-            } else if (ast.getType() == HiveParser.TOK_FUNCTIONDI) {
-                fromColumns.addAll(parseSelect((ASTNode) ast.getChild(1)));
-            } else if (ast.getType() == HiveParser.TOK_FUNCTION) {
-                String fun = ast.getChild(0).getText();
-                if (ast.getChild(1) != null) {
-                    fromColumns.addAll(parseSelect((ASTNode) ast.getChild(1)));
-                }
-                if ("when".equalsIgnoreCase(fun)) {
-                    fromColumns.addAll(processChilds(ast, 1));
-                } else if ("IN".equalsIgnoreCase(fun)) {
-                    fromColumns.addAll(processChilds(ast, 2));
-                } else if ("TOK_ISNOTNULL".equalsIgnoreCase(fun)
-                        || "TOK_ISNULL".equalsIgnoreCase(fun)) {
-
-                } else if ("BETWEEN".equalsIgnoreCase(fun)) {
-                    fromColumns.addAll(parseSelect((ASTNode) ast.getChild(2)));
-                    fromColumns.addAll(parseSelect((ASTNode) ast.getChild(3)));
-                    fromColumns.addAll(parseSelect((ASTNode) ast.getChild(4)));
-                }
-                fromColumns.addAll(processChilds(ast, 1));
-            } else if (ast.getType() == HiveParser.LSQUARE) {
-                fromColumns.addAll(parseSelect((ASTNode) ast.getChild(0)));
-                fromColumns.addAll(parseSelect((ASTNode) ast.getChild(1)));
-            } else if (ast.getType() == HiveParser.TOK_PARTITIONINGSPEC) {
-                fromColumns.addAll(processChilds(ast, 0));
-            } else {
-                fromColumns.addAll(parseSelectColumn(ast));
-            }
-        } catch (Exception e) {
-            logger.warn(e + " ast: " + ast.getText());
-        } finally {
-            return fromColumns;
-        }
-    }
-
-    public ParseColumnResult process(ASTNode ast) {
+    public String getColumnAliasName(ASTNode ast) {
         int childIndex = ast.getChildIndex();
-        Set<String> fromColumnSet = parseSelect((ASTNode) ast.getChild(0));
+
         ASTNode childAst = (ASTNode) ast.getChild(0);
         String columnAliasName;
         if (ast.getChild(1) != null) {
@@ -135,10 +84,39 @@ public class ProcessTokSelexpr {
             // 使用的元数据获取到的 insert table 的字段
             columnAliasName = "col_" + childIndex;
         }
+        return columnAliasName;
+    }
+
+    private boolean hasAllcolref(ASTNode ast) {
+        boolean flag = false;
+        for (int i = 0; i < ast.getParent().getChildCount() - ast.getChildIndex(); i++) {
+            if (ast.getParent().getChild(i).getChild(0).getType() == HiveParser.TOK_ALLCOLREF) {
+                flag = true;
+                break;
+            }
+        }
+        return flag;
+    }
+
+    private int getChildIndex(ASTNode ast) {
+        int childIndex;
+        if (hasAllcolref(ast)) {
+            childIndex = ast.getChildIndex() + parseFromResult.size() - 1;
+        } else {
+            childIndex = ast.getChildIndex();
+        }
+        return childIndex;
+    }
+
+    public ParseColumnResult process(ASTNode ast) {
+        Set<String> fromColumnSet = parseSelect((ASTNode) ast.getChild(0));
+        String columnAliasName = getColumnAliasName(ast);
+
         ParseColumnResult parseColumnResult = new ParseColumnResult();
-        parseColumnResult.setIndex(childIndex);
+        parseColumnResult.setIndex(getChildIndex(ast));
         parseColumnResult.setAliasName(columnAliasName);
         parseColumnResult.setFromTableColumnSet(fromColumnSet);
+
         return parseColumnResult;
     }
 }

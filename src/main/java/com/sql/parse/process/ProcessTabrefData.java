@@ -17,6 +17,7 @@ public class ProcessTabrefData {
                 String columnName = columnNameList.get(j);
                 ParseColumnResult parseColumnResult = new ParseColumnResult();
                 parseColumnResult.setAliasName(columnName);
+                parseColumnResult.setIndex(j);
                 Set<String> fromTableColumnSet = new TreeSet<>();
                 fromTableColumnSet.add(tableFullName + "." + columnName);
                 parseColumnResult.setFromTableColumnSet(fromTableColumnSet);
