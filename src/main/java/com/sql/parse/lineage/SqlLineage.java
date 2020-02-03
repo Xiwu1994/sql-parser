@@ -19,10 +19,12 @@ public class SqlLineage {
     private static Logger logger = Logger.getLogger(SqlLineage.class);
     private DataWarehouseDao dataWarehouseDao = new DataWarehouseDao();
 
+    private Map<String, ParseColumnResult> parseAllColref = new HashMap<>();
     private List<ParseColumnResult> parseColumnResults = new ArrayList();
     private List<ParseTableResult> parseTableResults = new ArrayList();
     private List<ParseJoinResult> parseJoinResults = new ArrayList();
     private List<ParseSubQueryResult> parseSubQueryResults = new ArrayList();
+    private List<ParseWithResult> parseWithResults = new ArrayList<>();
 
     // from tables
     private Set<String> fromTables = new HashSet<>();
@@ -45,7 +47,12 @@ public class SqlLineage {
         return parseQueryResults;
     }
 
+    private void setParseWithResults(List<ParseWithResult> parseWithResults) {
+        this.parseWithResults = parseWithResults;
+    }
+
     public void clear() {
+        parseWithResults.clear();
         fromTables.clear();
         parseColumnResults.clear();
         parseTableResults.clear();
@@ -71,10 +78,23 @@ public class SqlLineage {
             ast = pd.parse(sql, context);
             logger.debug(ast.dump());
         } catch (Exception e) {
-            logger.error("process error sql: " + sql);
+            logger.error("SQL->AST ERROR. Sql: " + sql);
             logger.error(e);
         }
         return ast;
+    }
+
+    private ParseColumnResult getIndexColumnResult(Map<String, ParseColumnResult> parseColumnMap, int childIndex) {
+        ParseColumnResult indexParseColumnResult = null;
+        for(Map.Entry<String, ParseColumnResult> entry : parseColumnMap.entrySet()){
+            String aliasName = entry.getKey();
+            ParseColumnResult parseColumnResult = entry.getValue();
+            if (parseColumnResult.getIndex() == childIndex) {
+                indexParseColumnResult = parseColumnMap.get(aliasName);
+                break;
+            }
+        }
+        return indexParseColumnResult;
     }
 
     public void parseChildASTNode(ASTNode ast) {
@@ -83,6 +103,26 @@ public class SqlLineage {
             // later view 比较特殊，需要先处理 第二个节点，再返回处理 第一个节点
             parseASTNode((ASTNode) ast.getChild(1));
             parseASTNode((ASTNode) ast.getChild(0));
+        } else if (ast.getToken() != null && (ast.getToken().getType() == HiveParser.TOK_QUERY && ast.getChild(2) != null && ast.getChild(2).getType() == HiveParser.TOK_CTE)) {
+            // 判断是否有 with 生成的临时表，优先处理建表语句(SUBQUERY)
+
+            for (int i=0; i < ast.getChild(2).getChildCount(); i++) {
+                parseASTNode((ASTNode) ast.getChild(2).getChild(i));
+
+                for (int j=i; j<parseSubQueryResults.size();j++) {
+                    ParseWithResult parseWithResult = new ParseWithResult();
+                    parseWithResult.setTableName(parseSubQueryResults.get(i).getAliasName());
+                    Map<String, ParseColumnResult> parseSubQueryResultTmp = new HashMap<>();
+                    parseSubQueryResultTmp.putAll(parseSubQueryResults.get(i).getParseSubQueryResults());
+                    parseWithResult.setParseSubQueryResults(parseSubQueryResultTmp);
+                    parseWithResults.add(parseWithResult);
+                }
+            }
+
+            parseSubQueryResults.clear();
+
+            parseASTNode((ASTNode) ast.getChild(0));
+            parseASTNode((ASTNode) ast.getChild(1));
         } else {
             int childCount = ast.getChildCount();
             for (int i = 0; i < childCount; i++) {
@@ -100,8 +140,18 @@ public class SqlLineage {
                 break;
 
             case HiveParser.TOK_TABREF:
-                fromColumnDataMap = ProcessTabrefData.process(parseTableResults);
-                parseTableResults.clear();
+                if (ast.getChild(0).getChildCount() == 1) {
+                    String tableName = BaseSemanticAnalyzer.getUnescapedName((ASTNode) ast.getChild(0).getChild(0));
+                    for (int i=0; i<parseWithResults.size(); i++) {
+                        if (parseWithResults.get(i).getTableName().equals(tableName)) {
+                            fromColumnDataMap = ProcessWithData.process(parseWithResults);
+                            break;
+                        }
+                    }
+                } else {
+                    fromColumnDataMap = ProcessTabrefData.process(parseTableResults);
+                    parseTableResults.clear();
+                }
                 break;
 
             case HiveParser.TOK_RIGHTOUTERJOIN:
@@ -170,11 +220,17 @@ public class SqlLineage {
                     putInTableDependencies();
                     for (int i=0; i<insertTableColumns.size(); i++) {
                         String createTableColumnName = insertTableColumns.get(i);
-                        Set createFromTableColumnSet = parseSelectResults.get(createTableColumnName).getFromTableColumnSet();
+                        Set createFromTableColumnSet = null;
+                        if (parseAllColref.size() > 0) {
+                            createFromTableColumnSet = getIndexColumnResult(parseAllColref, i).getFromTableColumnSet();
+                        } else {
+                            createFromTableColumnSet = getIndexColumnResult(parseSelectResults, i).getFromTableColumnSet();
+                        }
                         System.out.println("字段：" + createTableColumnName + " 依赖字段: " + createFromTableColumnSet);
                         // 将字段的依赖关系入库
                         putInColumnDependencies(insertTable + "." + createTableColumnName, createFromTableColumnSet);
                     }
+                    parseAllColref.clear();
                 }
                 break;
 
@@ -196,15 +252,18 @@ public class SqlLineage {
                 for(Map.Entry<String, ParseColumnResult> entry : parseColumnResultMap.entrySet()){
                     String columnAliasName = entry.getKey();
                     ParseColumnResult parseColumnResult = entry.getValue();
+                    int childIndex = parseColumnResult.getIndex();
                     // (TOK_QUERY) UNION ALL (TOK_QUERY)
                     if (parseQueryResults.size() == 2) {
-                        Set<String> otherUnionFromColumnSet = parseQueryResults.get(1).get(columnAliasName).getFromTableColumnSet();
+                        Set<String> otherUnionFromColumnSet = getIndexColumnResult(parseQueryResults.get(1),
+                                childIndex).getFromTableColumnSet();
                         parseColumnResult.getFromTableColumnSet().addAll(otherUnionFromColumnSet);
                         newParseColumnResultMap.put(columnAliasName, parseColumnResult);
                     }
                     // (TOK_UNIONALL) UNION ALL (TOK_QUERY)
                     if (parseUnionColumnResults.size() > 0) {
-                        Set<String> otherUnionFromColumnSet = parseUnionColumnResults.get(columnAliasName).getFromTableColumnSet();
+                        Set<String> otherUnionFromColumnSet = getIndexColumnResult(parseUnionColumnResults,
+                                childIndex).getFromTableColumnSet();
                         parseColumnResult.getFromTableColumnSet().addAll(otherUnionFromColumnSet);
                         newParseColumnResultMap.put(columnAliasName, parseColumnResult);
                     }
@@ -233,21 +292,41 @@ public class SqlLineage {
                     dataWarehouseDao.deleteTableDependencies(insertTable);
                     // 将表的依赖关系入库
                     putInTableDependencies();
+
                     for (int i = 0; i < insertTableColumns.size(); i++) {
                         String insertTableColumnName = insertTableColumns.get(i);
-                        Set<String> insertFromTableColumnSet = parseColumnResults.get(i).getFromTableColumnSet();
+                        Set<String> insertFromTableColumnSet = null;
+                        if (parseAllColref.size() > 0) {
+                            // 判断是否是 select * 入库方式
+                            // TODO: parseFromResult 应该改成List类型，因为select * 是有顺序的。但是改动太大了..
+                            // TODO: insert table1 select * from table2  如果table1和table2的字段名不一样，字段血缘 解析不出
+                            insertFromTableColumnSet = getIndexColumnResult(parseAllColref, i).getFromTableColumnSet();
+                        } else {
+                            insertFromTableColumnSet = parseColumnResults.get(i).getFromTableColumnSet();
+                        }
                         System.out.println("字段：" + insertTableColumnName + " 依赖字段: " + insertFromTableColumnSet);
                         // 将字段的依赖关系入库
                         putInColumnDependencies(insertTable + "." + insertTableColumnName, insertFromTableColumnSet);
                     }
+                    parseAllColref.clear();
                     parseColumnResults.clear();
                     insertTableColumns.clear();
                 } else {
-                    for (int i = 0; i < parseColumnResults.size(); i++) {
-                        selectResultsTmp.put(parseColumnResults.get(i).getAliasName(), parseColumnResults.get(i));
+                    if (parseColumnResults.size() != 0) {
+                        for (int i = 0; i < parseColumnResults.size(); i++) {
+                            selectResultsTmp.put(parseColumnResults.get(i).getAliasName(), parseColumnResults.get(i));
+                        }
+                        parseColumnResults.clear();
+                        parseSelectResults.putAll(selectResultsTmp);
+                    } else if (parseAllColref.size() != 0) {
+                        for(Map.Entry<String, ParseColumnResult> entry : parseAllColref.entrySet()){
+                            String aliasName = entry.getKey();
+                            ParseColumnResult parseColumnResult = entry.getValue();
+                            selectResultsTmp.put(aliasName, parseColumnResult);
+                        }
+                        parseAllColref.clear();
+                        parseSelectResults.putAll(selectResultsTmp);
                     }
-                    parseColumnResults.clear();
-                    parseSelectResults.putAll(selectResultsTmp);
                     logger.debug("TOK_INSERT: " + selectResultsTmp);
                 }
                 break;
@@ -313,6 +392,11 @@ public class SqlLineage {
                 parseSubQueryResults.clear();
                 parseJoinResult.setParseSubQueryResults(subQueryResults);
 
+                List<ParseWithResult> withResults = new ArrayList<>();
+                withResults.addAll(parseWithResults);
+//                parseWithResults.clear();
+                parseJoinResult.setParseWithResults(withResults);
+
                 logger.debug("TOK_JOIN: " + parseJoinResult);
 
                 parseJoinResults.add(parseJoinResult);
@@ -322,23 +406,43 @@ public class SqlLineage {
             // TOK_TABREF
             case HiveParser.TOK_TABREF:
                 String fromTableName = BaseSemanticAnalyzer.getUnescapedName((ASTNode) ast.getChild(0));
-                fromTables.add(fromTableName);
-                // to TOK_FROM or TOK_JOIN
-                ParseTableResult parseTableResult = ProcessTokTabref.process(ast);
-                logger.debug("TOK_TABREF: " + parseTableResult);
-
-                parseTableResults.add(parseTableResult);
+                Boolean isWithTable = Boolean.FALSE;
+                for (int i=0; i<parseWithResults.size(); i++) {
+                    if (parseWithResults.get(i).getTableName().equals(fromTableName)) {
+                        isWithTable = Boolean.TRUE;
+                        if (ast.getChild(1) != null) {
+                            String withTableAlias = BaseSemanticAnalyzer.getUnescapedName((ASTNode) ast.getChild(1));
+                            parseWithResults.get(i).setAliasName(withTableAlias);
+                        }
+                        break;
+                    }
+                }
+                if (! isWithTable) {
+                    fromTables.add(fromTableName);
+                    // to TOK_FROM or TOK_JOIN
+                    ParseTableResult parseTableResult = ProcessTokTabref.process(ast);
+                    logger.debug("TOK_TABREF: " + parseTableResult);
+                    parseTableResults.add(parseTableResult);
+                }
                 break;
 
             // SELECT
             case HiveParser.TOK_SELEXPR:
                 // from TOK_FROM
                 // to TOK_INSERT
-                ProcessTokSelexpr processTokSelexpr = new ProcessTokSelexpr();
-                processTokSelexpr.setParseFromResult(parseFromResult);
-                ParseColumnResult parseColumnResult = processTokSelexpr.process(ast);
-                logger.debug("TOK_SELEXPR: " + parseColumnResult);
-                parseColumnResults.add(parseColumnResult);
+                if (ast.getChild(0).getType() == HiveParser.TOK_ALLCOLREF) {
+                    // 判断是否是 select *
+                    for(Map.Entry<String, ParseColumnResult> entry : parseFromResult.entrySet()){
+                        ParseColumnResult parseColumnResult = entry.getValue();
+                        parseAllColref.put(parseColumnResult.getAliasName(), parseColumnResult);
+                    }
+                } else {
+                    ProcessTokSelexpr processTokSelexpr = new ProcessTokSelexpr();
+                    processTokSelexpr.setParseFromResult(parseFromResult);
+                    ParseColumnResult parseColumnResult = processTokSelexpr.process(ast);
+                    logger.debug("TOK_SELEXPR: " + parseColumnResult);
+                    parseColumnResults.add(parseColumnResult);
+                }
                 break;
             default:
                 break;
@@ -355,6 +459,7 @@ public class SqlLineage {
             // from TOK_UNIONALL or TOK_QUERY
             // to TOK_FROM or TOK_JOIN
             SqlLineage sqlLineage = new SqlLineage();
+            sqlLineage.setParseWithResults(parseWithResults);
             sqlLineage.parseASTNode((ASTNode) ast.getChild(0));
 
             Map<String, ParseColumnResult> subQueryColumnMap;
@@ -385,6 +490,11 @@ public class SqlLineage {
     public void parse(String sql) throws Exception {
         clear();
         ASTNode ast = getASTNode(sql);
-        parseASTNode(ast);
+        try {
+            parseASTNode(ast);
+        } catch (Exception e) {
+            logger.error("Parse AST ERROR. Sql: " + sql);
+            logger.error(e);
+        }
     }
 }
