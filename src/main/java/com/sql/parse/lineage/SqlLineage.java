@@ -78,7 +78,7 @@ public class SqlLineage {
             ast = pd.parse(sql, context);
             logger.debug(ast.dump());
         } catch (Exception e) {
-            logger.error("process error sql: " + sql);
+            logger.error("SQL->AST ERROR. Sql: " + sql);
             logger.error(e);
         }
         return ast;
@@ -490,6 +490,11 @@ public class SqlLineage {
     public void parse(String sql) throws Exception {
         clear();
         ASTNode ast = getASTNode(sql);
-        parseASTNode(ast);
+        try {
+            parseASTNode(ast);
+        } catch (Exception e) {
+            logger.error("Parse AST ERROR. Sql: " + sql);
+            logger.error(e);
+        }
     }
 }
