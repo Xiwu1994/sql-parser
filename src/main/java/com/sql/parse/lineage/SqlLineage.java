@@ -247,26 +247,27 @@ public class SqlLineage {
                 // to TOK_SUBQUERY or TOK_UNIONALL
                 Map<String, ParseColumnResult> newParseColumnResultMap = new HashMap<>();
 
-                Map<String, ParseColumnResult> parseColumnResultMap = parseQueryResults.get(0);
+                Map<String, ParseColumnResult> leftParseColumnResultMap;
+                Map<String, ParseColumnResult> RightParseColumnResultMap;
+                if (ast.getChild(0).getType() == HiveParser.TOK_UNIONALL) {
+                    // (TOK_QUERY) UNION ALL (TOK_QUERY)
+                    leftParseColumnResultMap = parseUnionColumnResults;
+                    RightParseColumnResultMap = parseQueryResults.get(0);
+                } else {
+                    // (TOK_UNIONALL) UNION ALL (TOK_QUERY)
+                    leftParseColumnResultMap = parseQueryResults.get(0);
+                    RightParseColumnResultMap = parseQueryResults.get(1);
+                }
 
-                for(Map.Entry<String, ParseColumnResult> entry : parseColumnResultMap.entrySet()){
+                for(Map.Entry<String, ParseColumnResult> entry : leftParseColumnResultMap.entrySet()){
                     String columnAliasName = entry.getKey();
                     ParseColumnResult parseColumnResult = entry.getValue();
                     int childIndex = parseColumnResult.getIndex();
-                    // (TOK_QUERY) UNION ALL (TOK_QUERY)
-                    if (parseQueryResults.size() == 2) {
-                        Set<String> otherUnionFromColumnSet = getIndexColumnResult(parseQueryResults.get(1),
-                                childIndex).getFromTableColumnSet();
-                        parseColumnResult.getFromTableColumnSet().addAll(otherUnionFromColumnSet);
-                        newParseColumnResultMap.put(columnAliasName, parseColumnResult);
-                    }
-                    // (TOK_UNIONALL) UNION ALL (TOK_QUERY)
-                    if (parseUnionColumnResults.size() > 0) {
-                        Set<String> otherUnionFromColumnSet = getIndexColumnResult(parseUnionColumnResults,
-                                childIndex).getFromTableColumnSet();
-                        parseColumnResult.getFromTableColumnSet().addAll(otherUnionFromColumnSet);
-                        newParseColumnResultMap.put(columnAliasName, parseColumnResult);
-                    }
+
+                    Set<String> otherUnionFromColumnSet = getIndexColumnResult(RightParseColumnResultMap,
+                            childIndex).getFromTableColumnSet();
+                    parseColumnResult.getFromTableColumnSet().addAll(otherUnionFromColumnSet);
+                    newParseColumnResultMap.put(columnAliasName, parseColumnResult);
                 }
                 parseUnionColumnResults.putAll(newParseColumnResultMap);
                 parseQueryResults.clear();
@@ -295,10 +296,14 @@ public class SqlLineage {
 
                     for (int i = 0; i < insertTableColumns.size(); i++) {
                         String insertTableColumnName = insertTableColumns.get(i);
-                        Set<String> insertFromTableColumnSet = null;
+                        Set<String> insertFromTableColumnSet;
                         if (parseAllColref.size() > 0) {
                             // 判断是否是 select * 入库方式
-                            insertFromTableColumnSet = getIndexColumnResult(parseAllColref, i).getFromTableColumnSet();
+                            if (i < parseAllColref.size()) {
+                                insertFromTableColumnSet = getIndexColumnResult(parseAllColref, i).getFromTableColumnSet();
+                            } else {
+                                insertFromTableColumnSet = new HashSet<>();
+                            }
                         } else {
                             if (i < parseColumnResults.size()) {
                                 insertFromTableColumnSet = parseColumnResults.get(i).getFromTableColumnSet();
