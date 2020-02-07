@@ -25,7 +25,7 @@ public class App {
         SqlLineage sqlLineage = new SqlLineage();
         for (String sql: sqlList.split("(?<!\\\\);")) {
             sql = StringUtil.subVariable(sql).replace("\\\"", " ");
-            String sqlTrim = sql.toLowerCase().trim();
+            String sqlTrim = sql.toLowerCase().trim().replace("/*+ mapjoin", "--");
             if (sqlTrim.startsWith("set") || sqlTrim.startsWith("add") || sqlTrim.startsWith("drop")||
                    sqlTrim.startsWith("load") || CheckUtil.isEmpty(sqlTrim)) {
                 continue;

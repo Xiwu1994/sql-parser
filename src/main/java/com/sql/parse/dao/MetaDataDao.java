@@ -25,11 +25,31 @@ public class MetaDataDao {
                 "DBS DB ON RD.DB_ID=DB.DB_ID WHERE " + sqlWhere + ")TD ON SD.SD_ID=TD.SD_ID " +
                 "ORDER BY RC.INTEGER_IDX";
 
+        String partitionSql = "select t1.PKEY_NAME,t2.TBL_NAME,t2.NAME " +
+                "from PARTITION_KEYS t1 " +
+                "join ( " +
+                "SELECT RD.TBL_ID, RD.TBL_NAME, DB.NAME " +
+                "FROM TBLS RD " +
+                "JOIN DBS DB " +
+                "ON RD.DB_ID = DB.DB_ID " +
+                "WHERE " + sqlWhere  +
+                " ) t2 " +
+                "on t1.TBL_ID = t2.TBL_ID " +
+                "ORDER BY t1.INTEGER_IDX";
+
         try {
             List<Map<String, Object>> rs = dbUtil.doSelect(sql);
+            List<Map<String, Object>> partitionRs = dbUtil.doSelect(partitionSql);
             for (Map<String, Object> map : rs) {
                 ColumnNode column = new ColumnNode();
                 column.setColumn((String) map.get("COLUMN_NAME"));
+                column.setTable((String) map.get("TBL_NAME"));
+                column.setDb((String) map.get("NAME"));
+                colList.add(column);
+            }
+            for (Map<String, Object> map: partitionRs) {
+                ColumnNode column = new ColumnNode();
+                column.setColumn((String) map.get("PKEY_NAME"));
                 column.setTable((String) map.get("TBL_NAME"));
                 column.setDb((String) map.get("NAME"));
                 colList.add(column);
