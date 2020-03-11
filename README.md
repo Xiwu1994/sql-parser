@@ -40,4 +40,16 @@ create table metadata_column_dependencies_mapping (
   key `idx_table_name` (`table_name`)
 ) engine=innodb default charset=utf8mb4 comment='元数据-字段依赖关系表';
 
+
+CREATE TABLE `metadata_table_join_on_relation` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `left_table` varchar(255) NOT NULL COMMENT '表1',
+  `right_table` varchar(255) NOT NULL COMMENT '表2',
+  `left_columns` varchar(255) NOT NULL COMMENT '表1 join 字段',
+  `right_columns` varchar(255) NOT NULL COMMENT '表2 join 字段',
+  `file_path` varchar(255) DEFAULT NULL COMMENT '文件名',
+  PRIMARY KEY (`id`),
+  KEY `idx_table_name` (`left_table`, `right_table`),
+  KEY `idx_file_path` (`file_path`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='元数据-JOIN关系表';
 ```
