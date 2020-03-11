@@ -19,6 +19,7 @@ public class SqlLineage {
     private static Logger logger = Logger.getLogger(SqlLineage.class);
     private DataWarehouseDao dataWarehouseDao = new DataWarehouseDao();
 
+    private String filePath;
     private Map<String, ParseColumnResult> parseAllColref = new HashMap<>();
     private List<ParseColumnResult> parseColumnResults = new ArrayList();
     private List<ParseTableResult> parseTableResults = new ArrayList();
@@ -47,6 +48,10 @@ public class SqlLineage {
         return parseQueryResults;
     }
 
+    public void setFilePath(String filePath) {
+        this.filePath = filePath;
+    }
+
     private void setParseWithResults(List<ParseWithResult> parseWithResults) {
         this.parseWithResults = parseWithResults;
     }
@@ -64,6 +69,9 @@ public class SqlLineage {
         parseUnionColumnResults.clear();
         parseFromResult.clear();
         parseLateralViewResult.clear();
+
+        // 删除JOIN关系表
+        dataWarehouseDao.deleteJoinRelation(filePath);
     }
 
     public ASTNode getASTNode(String sql) throws Exception {
@@ -82,6 +90,79 @@ public class SqlLineage {
             logger.error(e);
         }
         return ast;
+    }
+
+    public Map<String, String> getAliasTableFromTable(List<ParseTableResult> parseTableResults) {
+        Map<String, String> tableAliasMap = new HashMap<>();
+        for (int i = 0; i < parseTableResults.size(); i++) {
+            ParseTableResult parseTableResult = parseTableResults.get(i);
+            String aliasName = parseTableResult.getAliasName();
+            String tableFullName = parseTableResult.getTableFullName();
+            tableAliasMap.put(aliasName, tableFullName);
+        }
+        return tableAliasMap;
+    }
+
+    public Map<String, String> getAliasTableFromJoin(List<ParseJoinResult> parseJoinResults) {
+        Map<String, String> aliasTableMap = new HashMap<>();
+
+        for (int i = 0; i < parseJoinResults.size(); i++) {
+            ParseJoinResult parseJoinResult = parseJoinResults.get(i);
+            aliasTableMap.putAll(getAliasTableFromTable(parseJoinResult.getParseTableResults()));
+            List<ParseJoinResult> parseJoinResults1 = parseJoinResult.getParseJoinResults();
+            aliasTableMap.putAll(getAliasTableFromJoin(parseJoinResults1));
+        }
+        return aliasTableMap;
+    }
+
+
+    public void outputJoin(List<ParseJoinOnSingleRelation> parseOnOneResults, Map<String, String> tableAliasMap) {
+        for (int i = 0; i < parseOnOneResults.size(); i++) {
+            ParseJoinOnSingleRelation parseJoinOnSingleRelation = parseOnOneResults.get(i);
+            Set<String> leftAliasColumnSet = parseJoinOnSingleRelation.getLeftColumnSet();
+            Set<String> rightAliasColumnSet = parseJoinOnSingleRelation.getRightColumnSet();
+
+            String fullLeftTableName = null;
+            Set<String> leftColumnSet = new HashSet<>();
+            for (String leftColumn: leftAliasColumnSet) {
+                String aliasName = leftColumn.split("\\.")[0];
+                String columnName = leftColumn.split("\\.")[1];
+                if (! columnName.equals("p_day")) {
+                    leftColumnSet.add(columnName);
+                }
+                fullLeftTableName = tableAliasMap.get(aliasName);
+            }
+
+            String fullRightTableName = null;
+            Set<String> rightColumnSet = new HashSet<>();
+            for (String rightColumn: rightAliasColumnSet) {
+                String aliasName = rightColumn.split("\\.")[0];
+                String columnName = rightColumn.split("\\.")[1];
+                if (! columnName.equals("p_day")) {
+                    rightColumnSet.add(columnName);
+                }
+                rightColumnSet.add(columnName);
+                fullRightTableName = tableAliasMap.get(aliasName);
+            }
+
+            // 输出结构: [左表、右表]、左字段、右字段
+            if (fullLeftTableName != null && fullRightTableName != null
+                    && leftColumnSet.size() > 0 && rightColumnSet.size() > 0) {
+                String leftColumns = String.join(",", new ArrayList<>(leftColumnSet));
+                String rightColumns = String.join(",", new ArrayList<>(rightColumnSet));
+                try {
+                    if (fullLeftTableName.compareTo(fullRightTableName) > 0) {
+                        dataWarehouseDao.insertJoinRelation(fullLeftTableName, fullRightTableName, leftColumns, rightColumns, filePath);
+                    } else {
+                        dataWarehouseDao.insertJoinRelation(fullRightTableName, fullLeftTableName, rightColumns, leftColumns, filePath);
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    logger.error("insert db error.. Exception: " + e);
+                }
+            }
+
+        }
     }
 
     private ParseColumnResult getIndexColumnResult(Map<String, ParseColumnResult> parseColumnMap, int childIndex) {
@@ -381,6 +462,20 @@ public class SqlLineage {
             case HiveParser.TOK_MAPJOIN:
             case HiveParser.TOK_FULLOUTERJOIN:
             case HiveParser.TOK_UNIQUEJOIN:
+
+                // 处理 JOIN 的关系
+                Map<String, String> tableAliasMap = new HashMap();
+                tableAliasMap.putAll(getAliasTableFromTable(parseTableResults));
+                tableAliasMap.putAll(getAliasTableFromJoin(parseJoinResults));
+
+                // 有 ON 条件
+                if (ast.getChildCount() == 3) {
+                    ParseJoinOnRelation parseJoinOnRelation = ProcessJoinRelation.process((ASTNode) ast.getChild(2));
+
+                    List<ParseJoinOnSingleRelation> parseJoinOnSingleRelations = parseJoinOnRelation.getOnColumnList();
+                    outputJoin(parseJoinOnSingleRelations, tableAliasMap);
+                }
+
                 // from TOK_JOIN or TOK_FROM or TOK_SUBQUERY
                 // to TOK_JOIN or TOK_FROM to TOK_SUBQUERY
                 ParseJoinResult parseJoinResult = new ParseJoinResult();
@@ -469,6 +564,7 @@ public class SqlLineage {
             // from TOK_UNIONALL or TOK_QUERY
             // to TOK_FROM or TOK_JOIN
             SqlLineage sqlLineage = new SqlLineage();
+            sqlLineage.setFilePath(filePath);
             sqlLineage.setParseWithResults(parseWithResults);
             sqlLineage.parseASTNode((ASTNode) ast.getChild(0));
 

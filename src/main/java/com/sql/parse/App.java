@@ -23,6 +23,7 @@ public class App {
         String sqlList = FileUtil.read(sqlPath);
 
         SqlLineage sqlLineage = new SqlLineage();
+        sqlLineage.setFilePath(sqlPath);
         for (String sql: sqlList.split("(?<!\\\\);")) {
             sql = StringUtil.subVariable(sql).replace("\\\"", " ");
             String sqlTrim = sql.toLowerCase().trim().replace("/*+ mapjoin", "--");
