@@ -56,9 +56,10 @@ public class SqlLineage {
         this.parseWithResults = parseWithResults;
     }
 
-    public void deleteJoinRelation() {
-        // 删除JOIN关系表
+    public void deleteFilePathDbData() {
         dataWarehouseDao.deleteJoinRelation(filePath);
+        dataWarehouseDao.deleteColumnWhere(filePath);
+        dataWarehouseDao.deleteColumnGroupBy(filePath);
     }
 
     public void clear() {
@@ -164,6 +165,30 @@ public class SqlLineage {
                 }
             }
 
+        }
+    }
+
+    public void processColumnUsage(ASTNode ast, String type) {
+        ProcessTokSelexpr processTokSelexpr = new ProcessTokSelexpr();
+        processTokSelexpr.setParseFromResult(parseFromResult);
+
+        Set<String> fromColumnSet = processTokSelexpr.parseSelect((ASTNode) ast.getChild(0));
+        for (String columnFullName: fromColumnSet) {
+            String dbName = columnFullName.split("\\.")[0];
+            String tableName = columnFullName.split("\\.")[1];
+            String columnName = columnFullName.split("\\.")[2];
+            if (! columnName.equals("p_day")) {
+                try {
+                    if (type.equals("where")) {
+                        dataWarehouseDao.insertColumnWhere(dbName + "." + tableName, columnName, filePath);
+                    } else if (type.equals("groupby")) {
+                        dataWarehouseDao.insertColumnGroupBy(dbName + "." + tableName, columnName, filePath);
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    logger.error("insert db error.. Exception: " + e);
+                }
+            }
         }
     }
 
@@ -550,6 +575,16 @@ public class SqlLineage {
                     logger.debug("TOK_SELEXPR: " + parseColumnResult);
                     parseColumnResults.add(parseColumnResult);
                 }
+                break;
+            // SELECT
+            case HiveParser.TOK_WHERE:
+                // from TOK_FROM
+                processColumnUsage(ast, "where");
+                break;
+            // Group By
+            case HiveParser.TOK_GROUPBY:
+                // from TOK_FROM
+                processColumnUsage(ast, "groupby");
                 break;
             default:
                 break;

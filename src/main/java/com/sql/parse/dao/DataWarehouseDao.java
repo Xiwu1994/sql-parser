@@ -53,4 +53,34 @@ public class DataWarehouseDao {
                 leftColumns + "','" + rightColumns + "','" + filePath + "')";
         dbUtil.doInsert(insertSql);
     }
+
+    public void deleteColumnWhere(String filePath) {
+        try {
+            String deleteSql = "delete from metadata_table_column_where where file_path = '" + filePath + "'";
+            dbUtil.doDelete(deleteSql);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void insertColumnWhere(String tableName, String columnName, String filePath) throws SQLException {
+        String insertSql = "insert into metadata_table_column_where(table_name, column_name, file_path) values('"
+                + tableName + "','" +  columnName + "','" + filePath + "')";
+        dbUtil.doInsert(insertSql);
+    }
+
+    public void deleteColumnGroupBy(String filePath) {
+        try {
+            String deleteSql = "delete from metadata_table_column_groupby where file_path = '" + filePath + "'";
+            dbUtil.doDelete(deleteSql);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void insertColumnGroupBy(String tableName, String columnName, String filePath) throws SQLException {
+        String insertSql = "insert into metadata_table_column_groupby(table_name, column_name, file_path) values('"
+                + tableName + "','" +  columnName + "','" + filePath + "')";
+        dbUtil.doInsert(insertSql);
+    }
 }
