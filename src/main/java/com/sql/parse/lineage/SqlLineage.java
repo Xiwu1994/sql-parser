@@ -56,6 +56,11 @@ public class SqlLineage {
         this.parseWithResults = parseWithResults;
     }
 
+    public void deleteJoinRelation() {
+        // 删除JOIN关系表
+        dataWarehouseDao.deleteJoinRelation(filePath);
+    }
+
     public void clear() {
         parseWithResults.clear();
         fromTables.clear();
@@ -69,9 +74,6 @@ public class SqlLineage {
         parseUnionColumnResults.clear();
         parseFromResult.clear();
         parseLateralViewResult.clear();
-
-        // 删除JOIN关系表
-        dataWarehouseDao.deleteJoinRelation(filePath);
     }
 
     public ASTNode getASTNode(String sql) throws Exception {

@@ -24,6 +24,7 @@ public class App {
 
         SqlLineage sqlLineage = new SqlLineage();
         sqlLineage.setFilePath(sqlPath);
+        sqlLineage.deleteJoinRelation();
         for (String sql: sqlList.split("(?<!\\\\);")) {
             sql = StringUtil.subVariable(sql).replace("\\\"", " ");
             String sqlTrim = sql.toLowerCase().trim().replace("/*+ mapjoin", "--");
