@@ -47,4 +47,24 @@ CREATE TABLE `metadata_table_join_on_relation` (
   KEY `idx_table_name` (`left_table`, `right_table`),
   KEY `idx_file_path` (`file_path`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='元数据-JOIN关系表';
+
+CREATE TABLE `metadata_table_column_where` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `table_name` varchar(255) NOT NULL COMMENT '表名',
+  `column_name` varchar(255) NOT NULL COMMENT '字段名',
+  `file_path` varchar(255) DEFAULT NULL COMMENT '文件名',
+  PRIMARY KEY (`id`),
+  KEY `idx_table_name` (`table_name`, `column_name`),
+  KEY `idx_file_path` (`file_path`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='元数据-表字段被过滤情况';
+
+CREATE TABLE `metadata_table_column_groupby` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `table_name` varchar(255) NOT NULL COMMENT '表名',
+  `column_name` varchar(255) NOT NULL COMMENT '字段名',
+  `file_path` varchar(255) DEFAULT NULL COMMENT '文件名',
+  PRIMARY KEY (`id`),
+  KEY `idx_table_name` (`table_name`, `column_name`),
+  KEY `idx_file_path` (`file_path`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='元数据-表字段被聚合情况';
 ```
